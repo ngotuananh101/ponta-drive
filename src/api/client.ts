@@ -40,3 +40,10 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
 
   return data as T
 }
+
+export async function forgotPassword(email: string): Promise<ApiResponse> {
+  return fetchApi<ApiResponse>('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
+}
