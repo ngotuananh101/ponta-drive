@@ -25,7 +25,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value)
 
-  async function login(credentials: { login: string; password: string }): Promise<void> {
+  async function login(credentials: { email: string; password: string }): Promise<void> {
     loading.value = true
     try {
       const res = await fetchApi<ApiResponse<LoginData>>('/api/auth/login', {

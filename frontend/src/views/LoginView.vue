@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from 'vue-sonner'
-import { Cloud, User, Lock, Eye, EyeOff, Loader2, LogIn } from 'lucide-vue-next'
+import { Cloud, Mail, Lock, Eye, EyeOff, Loader2, LogIn } from 'lucide-vue-next'
 
 import {
   Card,
@@ -20,24 +20,24 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const form = ref({
-  login: '',
+  email: '',
   password: '',
 })
 
 const showPassword = ref(false)
 
 async function onSubmit() {
-  const loginVal = form.value.login.trim()
+  const emailVal = form.value.email.trim()
   const passwordVal = form.value.password
 
-  if (!loginVal || !passwordVal) {
-    toast.warning('Vui lòng nhập đầy đủ tên đăng nhập/email và mật khẩu')
+  if (!emailVal || !passwordVal) {
+    toast.warning('Vui lòng nhập đầy đủ email và mật khẩu')
     return
   }
 
   try {
     await authStore.login({
-      login: loginVal,
+      email: emailVal,
       password: passwordVal,
     })
 
@@ -47,7 +47,7 @@ async function onSubmit() {
     toast.error(
       err instanceof Error
         ? err.message
-        : 'Tên đăng nhập hoặc mật khẩu không chính xác'
+        : 'Email hoặc mật khẩu không chính xác'
     )
   }
 }
@@ -55,7 +55,7 @@ async function onSubmit() {
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-muted/40 p-4">
-    <Card class="w-full max-w-md shadow-xl border-border">
+    <Card class="w-full max-w-md shadow-xl border-border py-0">
       <CardHeader class="space-y-2 text-center pt-8">
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <Cloud class="h-8 w-8" />
@@ -67,14 +67,15 @@ async function onSubmit() {
       <CardContent class="pt-4 pb-8">
         <form @submit.prevent="onSubmit" class="space-y-4">
           <div class="space-y-2">
-            <Label for="login">Tên đăng nhập hoặc Email</Label>
+            <Label for="email">Email</Label>
             <div class="relative flex items-center">
-              <User class="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Mail class="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
-                id="login"
-                v-model="form.login"
+                id="email"
+                type="email"
+                v-model="form.email"
                 class="pl-9"
-                placeholder="admin hoặc email@domain.com"
+                placeholder="name@example.com"
                 :disabled="authStore.loading"
                 autofocus
               />
