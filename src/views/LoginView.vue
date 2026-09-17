@@ -2,81 +2,78 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useToast } from 'primevue/usetoast'
-import Card from 'primevue/card'
-import InputText from 'primevue/inputtext'
-import Password from 'primevue/password'
-import Button from 'primevue/button'
+import { toast } from 'vue-sonner'
+import { Cloud, User, Lock, Eye, EyeOff, Loader2, LogIn } from 'lucide-vue-next'
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const toast = useToast()
 
 const form = ref({
   login: '',
   password: '',
 })
 
+const showPassword = ref(false)
+
 async function onSubmit() {
-  if (!form.value.login.trim() || !form.value.password) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Thiếu thông tin',
-      detail: 'Vui lòng nhập tên đăng nhập/email và mật khẩu',
-      life: 3000,
-    })
+  const loginVal = form.value.login.trim()
+  const passwordVal = form.value.password
+
+  if (!loginVal || !passwordVal) {
+    toast.warning('Vui lòng nhập đầy đủ tên đăng nhập/email và mật khẩu')
     return
   }
 
   try {
     await authStore.login({
-      login: form.value.login.trim(),
-      password: form.value.password,
+      login: loginVal,
+      password: passwordVal,
     })
-    toast.add({
-      severity: 'success',
-      summary: 'Đăng nhập thành công',
-      detail: `Chào mừng ${authStore.user?.name || 'bạn'} trở lại!`,
-      life: 2500,
-    })
+
+    toast.success(`Chào mừng ${authStore.user?.name || 'bạn'} trở lại!`)
     router.push({ name: 'home' })
   } catch (err) {
-    toast.add({
-      severity: 'error',
-      summary: 'Đăng nhập thất bại',
-      detail:
-        err instanceof Error
-          ? err.message
-          : 'Tên đăng nhập hoặc mật khẩu không chính xác',
-      life: 4000,
-    })
+    toast.error(
+      err instanceof Error
+        ? err.message
+        : 'Tên đăng nhập hoặc mật khẩu không chính xác'
+    )
   }
 }
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-    <Card class="w-full max-w-md shadow-xl border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
-      <template #header>
-        <div class="pt-8 px-6 text-center">
-          <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 mb-3">
-            <i class="pi pi-cloud text-3xl"></i>
-          </div>
-          <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Ponta Drive</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Đăng nhập để quản lý tệp và tài liệu của bạn</p>
+  <div class="min-h-screen flex items-center justify-center bg-muted/40 p-4">
+    <Card class="w-full max-w-md shadow-xl border-border">
+      <CardHeader class="space-y-2 text-center pt-8">
+        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Cloud class="h-8 w-8" />
         </div>
-      </template>
+        <CardTitle class="text-2xl font-bold tracking-tight">Ponta Drive</CardTitle>
+        <CardDescription>Đăng nhập để quản lý tệp và tài liệu của bạn</CardDescription>
+      </CardHeader>
 
-      <template #content>
-        <form @submit.prevent="onSubmit" class="flex flex-col gap-5 px-2">
-          <div class="flex flex-col gap-2">
-            <label for="login" class="text-sm font-medium text-slate-700 dark:text-slate-300">Tên đăng nhập hoặc Email</label>
+      <CardContent class="pt-4 pb-8">
+        <form @submit.prevent="onSubmit" class="space-y-4">
+          <div class="space-y-2">
+            <Label for="login">Tên đăng nhập hoặc Email</Label>
             <div class="relative flex items-center">
-              <i class="pi pi-user absolute left-3.5 text-slate-400 pointer-events-none z-10"></i>
-              <InputText
+              <User class="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
                 id="login"
                 v-model="form.login"
-                class="w-full pl-10!"
+                class="pl-9"
                 placeholder="admin hoặc email@domain.com"
                 :disabled="authStore.loading"
                 autofocus
@@ -84,29 +81,41 @@ async function onSubmit() {
             </div>
           </div>
 
-          <div class="flex flex-col gap-2">
-            <label for="password" class="text-sm font-medium text-slate-700 dark:text-slate-300">Mật khẩu</label>
-            <Password
-              id="password"
-              v-model="form.password"
-              class="w-full"
-              input-class="w-full"
-              placeholder="Nhập mật khẩu"
-              :feedback="false"
-              toggle-mask
-              :disabled="authStore.loading"
-            />
+          <div class="space-y-2">
+            <Label for="password">Mật khẩu</Label>
+            <div class="relative flex items-center">
+              <Lock class="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                id="password"
+                :type="showPassword ? 'text' : 'password'"
+                v-model="form.password"
+                class="pl-9 pr-10"
+                placeholder="Nhập mật khẩu"
+                :disabled="authStore.loading"
+              />
+              <button
+                type="button"
+                @click="showPassword = !showPassword"
+                class="absolute right-3 text-muted-foreground hover:text-foreground transition-colors"
+                tabindex="-1"
+              >
+                <Eye v-if="!showPassword" class="h-4 w-4" />
+                <EyeOff v-else class="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <Button
             type="submit"
-            label="Đăng nhập"
-            icon="pi pi-sign-in"
-            class="w-full mt-2"
-            :loading="authStore.loading"
-          />
+            class="w-full mt-2 font-medium"
+            :disabled="authStore.loading"
+          >
+            <Loader2 v-if="authStore.loading" class="mr-2 h-4 w-4 animate-spin" />
+            <LogIn v-else class="mr-2 h-4 w-4" />
+            Đăng nhập
+          </Button>
         </form>
-      </template>
+      </CardContent>
     </Card>
   </div>
 </template>
