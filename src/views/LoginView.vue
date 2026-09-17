@@ -3,7 +3,8 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from 'vue-sonner'
-import { Cloud, Mail, Lock, Eye, EyeOff, Loader2, LogIn } from 'lucide-vue-next'
+import { Mail, Lock, Eye, EyeOff, Loader2, LogIn } from 'lucide-vue-next'
+import { AppLogo } from '@/components/icons'
 
 import {
   Card,
@@ -57,8 +58,8 @@ async function onSubmit() {
   <div class="min-h-screen flex items-center justify-center bg-muted/40 p-4">
     <Card class="w-full max-w-md shadow-xl border-border py-0">
       <CardHeader class="space-y-2 text-center pt-8">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <Cloud class="h-8 w-8" />
+        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+          <AppLogo class="h-9 w-9" />
         </div>
         <CardTitle class="text-2xl font-bold tracking-tight">Ponta Drive</CardTitle>
         <CardDescription>Đăng nhập để quản lý tệp và tài liệu của bạn</CardDescription>
