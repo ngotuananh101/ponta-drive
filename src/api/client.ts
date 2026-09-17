@@ -47,3 +47,19 @@ export async function forgotPassword(email: string): Promise<ApiResponse> {
     body: JSON.stringify({ email }),
   })
 }
+
+export interface ResetPasswordPayload {
+  email: string
+  token: string
+  password: string
+  password_confirmation: string
+}
+
+export async function resetPassword(payload: ResetPasswordPayload): Promise<ApiResponse> {
+  return fetchApi<ApiResponse>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+
