@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
+  import { ref, onUnmounted } from 'vue'
   import { useRoute, useRouter, RouterLink } from 'vue-router'
   import { toast } from 'vue-sonner'
   import { Lock, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-vue-next'
@@ -24,6 +24,13 @@
   const showPassword = ref(false)
   const showPasswordConfirmation = ref(false)
   const loading = ref(false)
+  let redirectTimer: ReturnType<typeof setTimeout> | null = null
+
+  onUnmounted(() => {
+    if (redirectTimer) {
+      clearTimeout(redirectTimer)
+    }
+  })
 
   async function onSubmit() {
     if (!token) {
@@ -49,7 +56,7 @@
       await resetPassword({ email, token, password, password_confirmation: passwordConfirmation })
 
       toast.success('Đặt lại mật khẩu thành công! Đang chuyển đến đăng nhập...')
-      setTimeout(() => {
+      redirectTimer = setTimeout(() => {
         router.push({ name: 'login' })
       }, 1500)
     } catch (err) {

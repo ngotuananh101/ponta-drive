@@ -62,4 +62,3 @@ export async function resetPassword(payload: ResetPasswordPayload): Promise<ApiR
   })
 }
 
-
