@@ -1,8 +1,8 @@
 <script setup lang="ts">
-  import { ref, onUnmounted } from 'vue'
+  import { ref, computed, watch, onUnmounted } from 'vue'
   import { useRoute, useRouter, RouterLink } from 'vue-router'
   import { toast } from 'vue-sonner'
-  import { Lock, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-vue-next'
+  import { Mail, Lock, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-vue-next'
   import AuthLayout from '@/layouts/AuthLayout.vue'
   import { resetPassword } from '@/api/client'
 
@@ -13,8 +13,24 @@
   const route = useRoute()
   const router = useRouter()
 
-  const token = String(route.query.token || '')
-  const email = String(route.query.email || '')
+  const token = computed(() => {
+    const rawToken = route.query.token
+    return String(Array.isArray(rawToken) ? rawToken[0] || '' : rawToken || '')
+  })
+
+  const email = ref('')
+
+  watch(
+    () => route.query.email,
+    (rawEmail) => {
+      if (rawEmail) {
+        email.value = String(Array.isArray(rawEmail) ? rawEmail[0] || '' : rawEmail || '')
+      }
+    },
+    { immediate: true }
+  )
+
+  const isEmailFromQuery = computed(() => Boolean(route.query.email))
 
   const form = ref({
     password: '',
@@ -33,7 +49,13 @@
   })
 
   async function onSubmit() {
-    if (!token) {
+    if (!token.value) {
+      return
+    }
+
+    const emailVal = email.value.trim()
+    if (!emailVal) {
+      toast.warning('Vui lòng nhập địa chỉ email')
       return
     }
 
@@ -53,7 +75,12 @@
     loading.value = true
 
     try {
-      await resetPassword({ email, token, password, password_confirmation: passwordConfirmation })
+      await resetPassword({
+        email: emailVal,
+        token: token.value,
+        password,
+        password_confirmation: passwordConfirmation,
+      })
 
       toast.success('Đặt lại mật khẩu thành công! Đang chuyển đến đăng nhập...')
       redirectTimer = setTimeout(() => {
@@ -99,14 +126,19 @@
     <form v-else @submit.prevent="onSubmit" class="space-y-4">
       <div class="space-y-2">
         <Label for="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          :value="email"
-          readonly
-          disabled
-          class="bg-muted"
-        />
+        <div class="relative flex items-center">
+          <Mail class="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            id="email"
+            type="email"
+            v-model="email"
+            class="pl-9"
+            :class="{ 'bg-muted': isEmailFromQuery }"
+            :readonly="isEmailFromQuery"
+            :disabled="loading"
+            placeholder="name@example.com"
+          />
+        </div>
       </div>
 
       <div class="space-y-2">
