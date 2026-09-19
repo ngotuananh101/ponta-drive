@@ -5,8 +5,11 @@ export interface ApiResponse<T = any> {
   [key: string]: any
 }
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+
 export async function fetchApi<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const url = API_BASE_URL ? `${API_BASE_URL}${path}` : path
   const token = localStorage.getItem('token')
   const locale = localStorage.getItem('ponta-drive-locale') || 'vi'
 
