@@ -44,7 +44,7 @@ async function handleLogout() {
         </div>
         <LanguageToggle />
         <ThemeToggle />
-        <Button variant="outline" class="h-10 px-3.5 rounded-xl border-border/60 hover:bg-accent/80 transition-all font-medium" @click="handleLogout">
+        <Button variant="outline" size="sm" @click="handleLogout">
           <LogOut class="mr-2 h-4 w-4" />
           {{ t('common.logout') }}
         </Button>
