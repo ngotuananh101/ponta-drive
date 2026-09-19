@@ -17,6 +17,7 @@
   },
   "routes": {
     "home": "Home",
+    "drive": "My Drive",
     "login": "Login",
     "forgot_password": "Forgot Password",
     "reset_password": "Reset Password"
@@ -58,9 +59,25 @@
     "reset_token_error": "Recovery token is invalid or has expired"
   },
   "home": {
-    "title": "Ponta Drive",
-    "welcome": "Welcome to Ponta Drive",
-    "description": "Safe, modern, and secure cloud storage system."
+    "title": "Home",
+    "welcome": "Welcome back, {name}!",
+    "description": "Centralized hub to manage and sync your multi-cloud storage spaces.",
+    "clouds_title": "Connected Cloud Storages",
+    "clouds_subtitle": "Active and synchronized cloud storage accounts",
+    "storage_used": "{used} / {total}",
+    "status_connected": "Connected",
+    "status_syncing": "Syncing",
+    "open_cloud": "Open Drive",
+    "suggested_title": "Suggested for you",
+    "suggested_subtitle": "Files you recently accessed or uploaded",
+    "recent_activity_title": "Recent activity",
+    "recent_activity_subtitle": "History of uploads, edits, and synchronizations",
+    "quick_actions": "Quick actions",
+    "quick_upload": "Upload file",
+    "quick_add_cloud": "Connect new Cloud",
+    "quick_new_folder": "New folder",
+    "view_all": "View all",
+    "no_recent_files": "No recent files"
   },
   "drive": {
     "search_placeholder": "Search in Drive",
@@ -94,6 +111,9 @@
     "details": "Details",
     "empty_drive_title": "This folder is empty",
     "empty_drive_subtitle": "Drop files here or use the '+ New' button to upload",
-    "me": "me"
+    "me": "me",
+    "add_cloud": "Add new Cloud",
+    "add_cloud_title": "Connect new Cloud",
+    "add_cloud_desc": "Cloud storage connection feature is under development"
   }
 }
