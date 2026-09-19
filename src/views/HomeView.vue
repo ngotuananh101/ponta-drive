@@ -3,6 +3,7 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import { Cloud, LogOut, FolderOpen } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
@@ -30,7 +31,7 @@ async function handleLogout() {
         <span class="font-bold text-xl text-foreground">Ponta Drive</span>
       </div>
 
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3">
         <div v-if="authStore.user" class="flex items-center gap-3">
           <img :src="authStore.user.avatar" :alt="authStore.user.name" class="w-9 h-9 rounded-full border border-border" />
           <div class="text-sm">
@@ -38,6 +39,7 @@ async function handleLogout() {
             <div class="text-xs text-muted-foreground">@{{ authStore.user.username }}</div>
           </div>
         </div>
+        <ThemeToggle />
         <Button variant="outline" size="sm" @click="handleLogout">
           <LogOut class="mr-2 h-4 w-4" />
           Đăng xuất
