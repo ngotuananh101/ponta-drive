@@ -19,7 +19,7 @@ defineProps<{
 
 <template>
   <div class="relative min-h-screen flex items-center justify-center bg-muted/40 p-4">
-    <div class="absolute top-4 right-4 flex items-center gap-1.5">
+    <div class="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2 z-10">
       <LanguageToggle />
       <ThemeToggle />
     </div>

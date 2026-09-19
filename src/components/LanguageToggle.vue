@@ -27,29 +27,28 @@ function onSelectLanguage(newLocale: SupportedLocale) {
     <DropdownMenuTrigger as-child>
       <Button
         variant="ghost"
-        size="sm"
-        class="h-9 px-2.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors gap-1.5 font-medium"
+        class="h-10 px-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/80 transition-all gap-2 font-medium border border-border/50 bg-background/60 shadow-xs"
         :title="t('common.language')"
       >
-        <Globe class="h-4 w-4" />
-        <span class="text-xs tracking-wider uppercase font-semibold">{{ locale }}</span>
+        <Globe class="h-5 w-5 text-muted-foreground" />
+        <span class="text-xs tracking-wider uppercase font-bold text-foreground">{{ locale }}</span>
         <span class="sr-only">{{ t('common.language') }}</span>
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" class="min-w-[150px]">
+    <DropdownMenuContent align="end" class="min-w-[160px] p-1.5">
       <DropdownMenuItem
         v-for="item in languages"
         :key="item.value"
-        class="flex items-center justify-between cursor-pointer"
+        class="flex items-center justify-between cursor-pointer py-2 px-2.5 rounded-lg text-sm"
         @click="onSelectLanguage(item.value)"
       >
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-mono font-bold px-1 py-0.5 rounded bg-muted text-muted-foreground">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-muted text-foreground border border-border/50">
             {{ item.code }}
           </span>
-          <span class="text-sm">{{ item.label }}</span>
+          <span class="font-medium">{{ item.label }}</span>
         </div>
-        <Check v-if="locale === item.value" class="h-4 w-4 text-primary" />
+        <Check v-if="locale === item.value" class="h-4 w-4 text-primary stroke-[2.5]" />
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
