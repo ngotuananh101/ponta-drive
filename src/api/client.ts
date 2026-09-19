@@ -8,10 +8,13 @@ export interface ApiResponse<T = any> {
 export async function fetchApi<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
   const token = localStorage.getItem('token')
+  const locale = localStorage.getItem('ponta-drive-locale') || 'vi'
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
+    'X-Locale': locale,
+    'Accept-Language': locale === 'vi' ? 'vi-VN,vi;q=0.9,en;q=0.8' : 'en-US,en;q=0.9,vi;q=0.8',
     ...(options.headers as Record<string, string>),
   }
 

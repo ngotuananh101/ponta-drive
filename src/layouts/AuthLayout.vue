@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { AppLogo } from '@/components/icons'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import LanguageToggle from '@/components/LanguageToggle.vue'
 import {
   Card,
   CardContent,
@@ -18,7 +19,8 @@ defineProps<{
 
 <template>
   <div class="relative min-h-screen flex items-center justify-center bg-muted/40 p-4">
-    <div class="absolute top-4 right-4">
+    <div class="absolute top-4 right-4 flex items-center gap-1.5">
+      <LanguageToggle />
       <ThemeToggle />
     </div>
 

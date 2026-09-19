@@ -1,0 +1,65 @@
+{
+  "common": {
+    "loading": "Đang xử lý...",
+    "back_to_login": "Quay lại đăng nhập",
+    "logout": "Đăng xuất",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "language": "Ngôn ngữ",
+    "vietnamese": "Tiếng Việt",
+    "english": "English"
+  },
+  "theme": {
+    "toggle_theme": "Chuyển đổi giao diện",
+    "light": "Sáng",
+    "dark": "Tối",
+    "system": "Hệ thống"
+  },
+  "routes": {
+    "home": "Trang chủ",
+    "login": "Đăng nhập",
+    "forgot_password": "Quên mật khẩu",
+    "reset_password": "Đặt lại mật khẩu"
+  },
+  "auth": {
+    "brand": "Ponta Drive",
+    "login_title": "Ponta Drive",
+    "login_subtitle": "Đăng nhập để quản lý tệp và tài liệu của bạn",
+    "email_placeholder": "name@example.com",
+    "password_placeholder": "Nhập mật khẩu",
+    "forgot_password": "Quên mật khẩu?",
+    "login_button": "Đăng nhập",
+    "login_warning_empty": "Vui lòng nhập đầy đủ email và mật khẩu",
+    "welcome_user": "Chào mừng {name} trở lại!",
+    "default_login_error": "Email hoặc mật khẩu không chính xác",
+    "forgot_title": "Quên mật khẩu",
+    "forgot_subtitle": "Nhập email tài khoản của bạn để nhận liên kết khôi phục",
+    "forgot_sent_notice": "Chúng tôi đã gửi liên kết đặt lại mật khẩu đến email của bạn nếu tài khoản tồn tại trong hệ thống. Vui lòng kiểm tra hộp thư đến (hoặc mục Spam).",
+    "forgot_resend_countdown": "Bạn có thể gửi lại liên kết sau {seconds}s",
+    "forgot_resend_button": "Gửi lại",
+    "forgot_change_email": "Đổi email khác",
+    "forgot_send_button": "Gửi liên kết khôi phục",
+    "forgot_email_empty": "Vui lòng nhập email của bạn",
+    "forgot_email_invalid": "Email không đúng định dạng",
+    "forgot_success": "Liên kết khôi phục đã được gửi!",
+    "reset_title": "Đặt lại mật khẩu",
+    "reset_subtitle": "Tạo mật khẩu mới an toàn cho tài khoản của bạn",
+    "reset_invalid_link": "Liên kết đặt lại mật khẩu không hợp lệ hoặc thiếu mã xác thực.",
+    "reset_request_new": "Yêu cầu liên kết mới",
+    "reset_new_password": "Mật khẩu mới",
+    "reset_new_password_placeholder": "Nhập mật khẩu mới (tối thiểu 8 ký tự)",
+    "reset_confirm_password": "Xác nhận mật khẩu",
+    "reset_confirm_password_placeholder": "Nhập lại mật khẩu mới",
+    "reset_button": "Cập nhật mật khẩu",
+    "reset_email_empty": "Vui lòng nhập địa chỉ email",
+    "reset_password_min": "Mật khẩu phải có ít nhất 8 ký tự",
+    "reset_password_mismatch": "Mật khẩu xác nhận không khớp với mật khẩu mới",
+    "reset_success": "Đặt lại mật khẩu thành công! Đang chuyển đến đăng nhập...",
+    "reset_token_error": "Mã khôi phục không hợp lệ hoặc đã hết hạn"
+  },
+  "home": {
+    "title": "Ponta Drive",
+    "welcome": "Chào mừng đến với Ponta Drive",
+    "description": "Hệ thống lưu trữ đám mây an toàn, hiện đại và bảo mật."
+  }
+}
