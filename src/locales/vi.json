@@ -25,7 +25,7 @@
     "brand": "Ponta Drive",
     "login_title": "Ponta Drive",
     "login_subtitle": "Đăng nhập để quản lý tệp và tài liệu của bạn",
-    "email_placeholder": "name@example.com",
+    "email_placeholder": "name{'@'}example.com",
     "password_placeholder": "Nhập mật khẩu",
     "forgot_password": "Quên mật khẩu?",
     "login_button": "Đăng nhập",

@@ -25,7 +25,7 @@
     "brand": "Ponta Drive",
     "login_title": "Ponta Drive",
     "login_subtitle": "Sign in to manage your files and documents",
-    "email_placeholder": "name@example.com",
+    "email_placeholder": "name{'@'}example.com",
     "password_placeholder": "Enter your password",
     "forgot_password": "Forgot password?",
     "login_button": "Sign in",
