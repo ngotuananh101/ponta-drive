@@ -17,6 +17,7 @@
   },
   "routes": {
     "home": "Trang chủ",
+    "drive": "Drive của tôi",
     "login": "Đăng nhập",
     "forgot_password": "Quên mật khẩu",
     "reset_password": "Đặt lại mật khẩu"
@@ -58,9 +59,25 @@
     "reset_token_error": "Mã khôi phục không hợp lệ hoặc đã hết hạn"
   },
   "home": {
-    "title": "Ponta Drive",
-    "welcome": "Chào mừng đến với Ponta Drive",
-    "description": "Hệ thống lưu trữ đám mây an toàn, hiện đại và bảo mật."
+    "title": "Trang chủ",
+    "welcome": "Chào mừng trở lại, {name}!",
+    "description": "Trung tâm quản lý tập trung và đồng bộ không gian lưu trữ đa đám mây của bạn.",
+    "clouds_title": "Dịch vụ Cloud đã kết nối",
+    "clouds_subtitle": "Các tài khoản lưu trữ đám mây đang hoạt động",
+    "storage_used": "{used} / {total}",
+    "status_connected": "Đang kết nối",
+    "status_syncing": "Đang đồng bộ",
+    "open_cloud": "Mở Drive",
+    "suggested_title": "Đề xuất cho bạn",
+    "suggested_subtitle": "Các tệp bạn thao tác hoặc tải lên gần nhất",
+    "recent_activity_title": "Hoạt động gần đây",
+    "recent_activity_subtitle": "Lịch sử thao tác tải lên, chỉnh sửa và đồng bộ",
+    "quick_actions": "Thao tác nhanh",
+    "quick_upload": "Tải tệp lên",
+    "quick_add_cloud": "Kết nối Cloud mới",
+    "quick_new_folder": "Thư mục mới",
+    "view_all": "Xem tất cả",
+    "no_recent_files": "Chưa có tệp nào gần đây"
   },
   "drive": {
     "search_placeholder": "Tìm kiếm trong Drive",
@@ -94,6 +111,9 @@
     "details": "Chi tiết",
     "empty_drive_title": "Thư mục này đang trống",
     "empty_drive_subtitle": "Kéo thả tệp vào đây hoặc bấm nút '+ Mới' để tải lên",
-    "me": "tôi"
+    "me": "tôi",
+    "add_cloud": "Thêm Cloud mới",
+    "add_cloud_title": "Kết nối Cloud mới",
+    "add_cloud_desc": "Tính năng kết nối tài khoản lưu trữ đám mây mới đang được phát triển"
   }
 }

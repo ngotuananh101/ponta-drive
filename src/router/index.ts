@@ -37,6 +37,12 @@ const router = createRouter({
       component: () => import('@/views/HomeView.vue'),
       meta: { requiresAuth: true, titleKey: 'routes.home' },
     },
+    {
+      path: '/drive',
+      name: 'drive',
+      component: () => import('@/views/DriveView.vue'),
+      meta: { requiresAuth: true, titleKey: 'routes.drive' },
+    },
   ],
 })
 
