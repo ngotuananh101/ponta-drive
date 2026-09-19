@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { AppLogo } from '@/components/icons'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import {
   Card,
   CardContent,
@@ -16,7 +17,11 @@ defineProps<{
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-muted/40 p-4">
+  <div class="relative min-h-screen flex items-center justify-center bg-muted/40 p-4">
+    <div class="absolute top-4 right-4">
+      <ThemeToggle />
+    </div>
+
     <Card class="w-full max-w-md shadow-xl border-border py-0">
       <CardHeader class="space-y-2 text-center pt-8">
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
