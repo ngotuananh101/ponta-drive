@@ -27,26 +27,26 @@ const options = computed<{ label: string; value: ThemeMode; icon: typeof Sun }[]
       <Button
         variant="ghost"
         size="icon"
-        class="h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+        class="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/80 transition-all border border-border/50 bg-background/60 shadow-xs"
         :title="t('theme.toggle_theme')"
       >
-        <Sun class="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-        <Moon class="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+        <Sun class="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-amber-500" />
+        <Moon class="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-sky-400" />
         <span class="sr-only">{{ t('theme.toggle_theme') }}</span>
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" class="min-w-[140px]">
+    <DropdownMenuContent align="end" class="min-w-[150px] p-1.5">
       <DropdownMenuItem
         v-for="item in options"
         :key="item.value"
-        class="flex items-center justify-between cursor-pointer"
+        class="flex items-center justify-between cursor-pointer py-2 px-2.5 rounded-lg text-sm"
         @click="setMode(item.value)"
       >
-        <div class="flex items-center gap-2">
-          <component :is="item.icon" class="h-4 w-4" />
-          <span>{{ item.label }}</span>
+        <div class="flex items-center gap-2.5">
+          <component :is="item.icon" class="h-4 w-4 text-muted-foreground" />
+          <span class="font-medium">{{ item.label }}</span>
         </div>
-        <Check v-if="mode === item.value" class="h-4 w-4 text-primary" />
+        <Check v-if="mode === item.value" class="h-4 w-4 text-primary stroke-[2.5]" />
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
