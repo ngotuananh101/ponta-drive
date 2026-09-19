@@ -26,7 +26,7 @@ defineProps<{
         <CardDescription>{{ description }}</CardDescription>
       </CardHeader>
 
-      <CardContent class="py-0">
+      <CardContent class="pt-0 pb-8">
         <slot />
       </CardContent>
 
