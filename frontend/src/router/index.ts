@@ -1,11 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { i18n } from '@/i18n'
 
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     requiresGuest?: boolean
-    title?: string
+    titleKey?: string
   }
 }
 
@@ -16,28 +17,38 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { requiresGuest: true, title: 'Đăng nhập' },
+      meta: { requiresGuest: true, titleKey: 'routes.login' },
     },
     {
       path: '/forgot-password',
       name: 'forgot-password',
       component: () => import('@/views/ForgotPasswordView.vue'),
-      meta: { requiresGuest: true, title: 'Quên mật khẩu' },
+      meta: { requiresGuest: true, titleKey: 'routes.forgot_password' },
     },
     {
       path: '/reset-password',
       name: 'reset-password',
       component: () => import('@/views/ResetPasswordView.vue'),
-      meta: { requiresGuest: true, title: 'Đặt lại mật khẩu' },
+      meta: { requiresGuest: true, titleKey: 'routes.reset_password' },
     },
     {
       path: '/',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
-      meta: { requiresAuth: true, title: 'Trang chủ' },
+      meta: { requiresAuth: true, titleKey: 'routes.home' },
     },
   ],
 })
+
+export function updateDocumentTitle(titleKey?: string) {
+  const brand = 'Ponta Drive'
+  if (titleKey && i18n.global.te(titleKey)) {
+    const title = i18n.global.t(titleKey)
+    document.title = `${title} - ${brand}`
+  } else {
+    document.title = brand
+  }
+}
 
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
@@ -54,12 +65,7 @@ router.beforeEach((to, from, next) => {
 })
 
 router.afterEach((to) => {
-  const title = to.meta.title
-  if (title) {
-    document.title = `${title} - Ponta Drive`
-  } else {
-    document.title = 'Ponta Drive'
-  }
+  updateDocumentTitle(to.meta.titleKey)
 })
 
 export default router

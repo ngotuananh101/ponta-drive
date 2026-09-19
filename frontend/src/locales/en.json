@@ -1,0 +1,65 @@
+{
+  "common": {
+    "loading": "Processing...",
+    "back_to_login": "Back to login",
+    "logout": "Log out",
+    "email": "Email",
+    "password": "Password",
+    "language": "Language",
+    "vietnamese": "Tiếng Việt",
+    "english": "English"
+  },
+  "theme": {
+    "toggle_theme": "Toggle theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "routes": {
+    "home": "Home",
+    "login": "Login",
+    "forgot_password": "Forgot Password",
+    "reset_password": "Reset Password"
+  },
+  "auth": {
+    "brand": "Ponta Drive",
+    "login_title": "Ponta Drive",
+    "login_subtitle": "Sign in to manage your files and documents",
+    "email_placeholder": "name@example.com",
+    "password_placeholder": "Enter your password",
+    "forgot_password": "Forgot password?",
+    "login_button": "Sign in",
+    "login_warning_empty": "Please enter both email and password",
+    "welcome_user": "Welcome back, {name}!",
+    "default_login_error": "Invalid email or password",
+    "forgot_title": "Forgot Password",
+    "forgot_subtitle": "Enter your account email to receive a recovery link",
+    "forgot_sent_notice": "We have sent a password reset link to your email if the account exists. Please check your inbox (or Spam folder).",
+    "forgot_resend_countdown": "You can resend the link in {seconds}s",
+    "forgot_resend_button": "Resend",
+    "forgot_change_email": "Change email",
+    "forgot_send_button": "Send recovery link",
+    "forgot_email_empty": "Please enter your email",
+    "forgot_email_invalid": "Invalid email address format",
+    "forgot_success": "Recovery link has been sent!",
+    "reset_title": "Reset Password",
+    "reset_subtitle": "Create a safe new password for your account",
+    "reset_invalid_link": "Password reset link is invalid or missing verification token.",
+    "reset_request_new": "Request new link",
+    "reset_new_password": "New password",
+    "reset_new_password_placeholder": "Enter new password (min. 8 characters)",
+    "reset_confirm_password": "Confirm password",
+    "reset_confirm_password_placeholder": "Re-enter new password",
+    "reset_button": "Update password",
+    "reset_email_empty": "Please enter your email address",
+    "reset_password_min": "Password must be at least 8 characters",
+    "reset_password_mismatch": "Confirmation password does not match new password",
+    "reset_success": "Password reset successfully! Redirecting to login...",
+    "reset_token_error": "Recovery token is invalid or has expired"
+  },
+  "home": {
+    "title": "Ponta Drive",
+    "welcome": "Welcome to Ponta Drive",
+    "description": "Safe, modern, and secure cloud storage system."
+  }
+}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { ref, computed, watch, onUnmounted } from 'vue'
   import { useRoute, useRouter, RouterLink } from 'vue-router'
+  import { useI18n } from 'vue-i18n'
   import { toast } from 'vue-sonner'
   import { Mail, Lock, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-vue-next'
   import AuthLayout from '@/layouts/AuthLayout.vue'
@@ -10,6 +11,7 @@
   import { Label } from '@/components/ui/label'
   import { Button } from '@/components/ui/button'
 
+  const { t } = useI18n()
   const route = useRoute()
   const router = useRouter()
 
@@ -55,7 +57,7 @@
 
     const emailVal = email.value.trim()
     if (!emailVal) {
-      toast.warning('Vui lòng nhập địa chỉ email')
+      toast.warning(t('auth.reset_email_empty'))
       return
     }
 
@@ -63,12 +65,12 @@
     const passwordConfirmation = form.value.password_confirmation
 
     if (password.length < 8) {
-      toast.warning('Mật khẩu phải có ít nhất 8 ký tự')
+      toast.warning(t('auth.reset_password_min'))
       return
     }
 
     if (password !== passwordConfirmation) {
-      toast.warning('Mật khẩu xác nhận không khớp với mật khẩu mới')
+      toast.warning(t('auth.reset_password_mismatch'))
       return
     }
 
@@ -82,7 +84,7 @@
         password_confirmation: passwordConfirmation,
       })
 
-      toast.success('Đặt lại mật khẩu thành công! Đang chuyển đến đăng nhập...')
+      toast.success(t('auth.reset_success'))
       redirectTimer = setTimeout(() => {
         router.push({ name: 'login' })
       }, 1500)
@@ -90,7 +92,7 @@
       toast.error(
         err instanceof Error
           ? err.message
-          : 'Mã khôi phục không hợp lệ hoặc đã hết hạn'
+          : t('auth.reset_token_error')
       )
     } finally {
       loading.value = false
@@ -100,24 +102,24 @@
 
 <template>
   <AuthLayout
-    title="Đặt lại mật khẩu"
-    description="Tạo mật khẩu mới an toàn cho tài khoản của bạn"
+    :title="t('auth.reset_title')"
+    :description="t('auth.reset_subtitle')"
   >
     <div v-if="!token" class="space-y-4">
       <div class="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive dark:text-destructive/90 space-y-2">
-        <p>Liên kết đặt lại mật khẩu không hợp lệ hoặc thiếu mã xác thực.</p>
+        <p>{{ t('auth.reset_invalid_link') }}</p>
         <div class="flex flex-col sm:flex-row gap-2 pt-2">
           <RouterLink
             to="/forgot-password"
             class="inline-flex items-center justify-center text-sm font-medium text-primary hover:underline"
           >
-            Yêu cầu liên kết mới
+            {{ t('auth.reset_request_new') }}
           </RouterLink>
           <RouterLink
             to="/login"
             class="inline-flex items-center justify-center text-sm font-medium text-primary hover:underline"
           >
-            Quay lại đăng nhập
+            {{ t('common.back_to_login') }}
           </RouterLink>
         </div>
       </div>
@@ -125,7 +127,7 @@
 
     <form v-else @submit.prevent="onSubmit" class="space-y-4">
       <div class="space-y-2">
-        <Label for="email">Email</Label>
+        <Label for="email">{{ t('common.email') }}</Label>
         <div class="relative flex items-center">
           <Mail class="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
@@ -142,7 +144,7 @@
       </div>
 
       <div class="space-y-2">
-        <Label for="password">Mật khẩu mới</Label>
+        <Label for="password">{{ t('auth.reset_new_password') }}</Label>
         <div class="relative flex items-center">
           <Lock class="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
@@ -150,7 +152,7 @@
             :type="showPassword ? 'text' : 'password'"
             v-model="form.password"
             class="pl-9 pr-10"
-            placeholder="Nhập mật khẩu mới (tối thiểu 8 ký tự)"
+            :placeholder="t('auth.reset_new_password_placeholder')"
             :disabled="loading"
           />
           <button
@@ -166,7 +168,7 @@
       </div>
 
       <div class="space-y-2">
-        <Label for="password_confirmation">Xác nhận mật khẩu</Label>
+        <Label for="password_confirmation">{{ t('auth.reset_confirm_password') }}</Label>
         <div class="relative flex items-center">
           <Lock class="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
@@ -174,7 +176,7 @@
             :type="showPasswordConfirmation ? 'text' : 'password'"
             v-model="form.password_confirmation"
             class="pl-9 pr-10"
-            placeholder="Nhập lại mật khẩu mới"
+            :placeholder="t('auth.reset_confirm_password_placeholder')"
             :disabled="loading"
           />
           <button
@@ -195,7 +197,7 @@
         :disabled="loading"
       >
         <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-        Cập nhật mật khẩu
+        {{ t('auth.reset_button') }}
       </Button>
     </form>
 
@@ -205,7 +207,7 @@
         class="inline-flex items-center text-sm font-medium text-primary hover:underline"
       >
         <ArrowLeft class="mr-2 h-4 w-4" />
-        Quay lại đăng nhập
+        {{ t('common.back_to_login') }}
       </RouterLink>
     </template>
   </AuthLayout>
