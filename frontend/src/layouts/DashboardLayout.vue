@@ -211,7 +211,7 @@ async function handleLogout() {
               <button
                 type="button"
                 class="p-1 mr-1.5 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-transform duration-200 cursor-pointer"
-                :title="isMyDriveOpen ? 'Thu gọn' : 'Mở rộng'"
+                :title="isMyDriveOpen ? t('common.collapse') : t('common.expand')"
                 @click.stop="isMyDriveOpen = !isMyDriveOpen"
               >
                 <ChevronDown
