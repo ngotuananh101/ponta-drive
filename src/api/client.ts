@@ -48,7 +48,7 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
 }
 
 export async function forgotPassword(email: string): Promise<ApiResponse> {
-  return fetchApi<ApiResponse>('/api/auth/forgot-password', {
+  return fetchApi<ApiResponse>('/auth/forgot-password', {
     method: 'POST',
     body: JSON.stringify({ email }),
   })
@@ -62,7 +62,7 @@ export interface ResetPasswordPayload {
 }
 
 export async function resetPassword(payload: ResetPasswordPayload): Promise<ApiResponse> {
-  return fetchApi<ApiResponse>('/api/auth/reset-password', {
+  return fetchApi<ApiResponse>('/auth/reset-password', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
