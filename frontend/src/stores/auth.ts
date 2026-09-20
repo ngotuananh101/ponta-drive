@@ -28,7 +28,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(credentials: { email: string; password: string }): Promise<void> {
     loading.value = true
     try {
-      const res = await fetchApi<ApiResponse<LoginData>>('/api/auth/login', {
+      const res = await fetchApi<ApiResponse<LoginData>>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
       })
@@ -46,7 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchUser(): Promise<void> {
     if (!token.value) return
     try {
-      const res = await fetchApi<ApiResponse<User>>('/api/auth/me')
+      const res = await fetchApi<ApiResponse<User>>('/auth/me')
       if (res.data) {
         user.value = res.data
       }
@@ -58,7 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(): Promise<void> {
     try {
       if (token.value) {
-        await fetchApi('/api/auth/logout', { method: 'POST' }).catch(() => {})
+        await fetchApi('/auth/logout', { method: 'POST' }).catch(() => {})
       }
     } finally {
       token.value = null
