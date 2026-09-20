@@ -28,6 +28,7 @@ import {
   Edit2,
   FolderPlus,
   Upload,
+  FolderOpen,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -212,7 +213,7 @@ function selectItem(id: string) {
             </div>
 
             <!-- Table Rows -->
-            <div class="divide-y divide-border/60 overflow-y-auto flex-1 min-h-0">
+            <div v-if="items.length > 0" class="divide-y divide-border/60 overflow-y-auto flex-1 min-h-0">
               <div
                 v-for="item in items"
                 :key="item.id"
@@ -284,30 +285,43 @@ function selectItem(id: string) {
                     <DropdownMenuContent align="end" class="w-48 p-1.5 shadow-xl border-border">
                       <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm">
                         <Download class="h-4 w-4" />
-                        <span>Tải xuống</span>
+                        <span>{{ t('drive.action_download') }}</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm">
                         <Share2 class="h-4 w-4" />
-                        <span>Chia sẻ</span>
+                        <span>{{ t('drive.action_share') }}</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm">
                         <Star class="h-4 w-4" />
-                        <span>Gắn dấu sao</span>
+                        <span>{{ t('drive.action_star') }}</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm">
                         <Edit2 class="h-4 w-4" />
-                        <span>Đổi tên</span>
+                        <span>{{ t('drive.action_rename') }}</span>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem class="cursor-pointer text-destructive focus:text-destructive py-2 gap-2 text-sm">
                         <Trash2 class="h-4 w-4" />
-                        <span>Xóa</span>
+                        <span>{{ t('drive.action_delete') }}</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
               </div>
             </div>
+            <!-- Empty State for List View -->
+            <div v-else class="flex flex-col items-center justify-center flex-1 py-16 text-center">
+              <FolderOpen class="h-12 w-12 text-muted-foreground/30 mb-3" />
+              <h3 class="text-sm font-semibold text-foreground">{{ t('drive.empty_drive_title') }}</h3>
+              <p class="text-xs text-muted-foreground mt-1 max-w-sm">{{ t('drive.empty_drive_subtitle') }}</p>
+            </div>
+          </div>
+
+          <!-- GRID VIEW: Empty State -->
+          <div v-else-if="items.length === 0" class="flex flex-col items-center justify-center flex-1 py-16 text-center">
+            <FolderOpen class="h-12 w-12 text-muted-foreground/30 mb-3" />
+            <h3 class="text-sm font-semibold text-foreground">{{ t('drive.empty_drive_title') }}</h3>
+            <p class="text-xs text-muted-foreground mt-1 max-w-sm">{{ t('drive.empty_drive_subtitle') }}</p>
           </div>
 
           <!-- GRID VIEW -->
@@ -315,7 +329,7 @@ function selectItem(id: string) {
             <!-- Folders Section -->
             <div>
               <h3 class="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 px-1">
-                Thư mục
+                {{ t('drive.type_folder') }}
               </h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 <div
@@ -344,7 +358,7 @@ function selectItem(id: string) {
             <!-- Files Section -->
             <div>
               <h3 class="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 px-1">
-                Tệp
+                {{ t('drive.type_file') }}
               </h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 <div
@@ -407,23 +421,23 @@ function selectItem(id: string) {
             </div>
             <div class="text-xs space-y-2 text-muted-foreground">
               <div class="flex justify-between">
-                <span>Chủ sở hữu:</span>
-                <span class="text-foreground font-medium">Tôi</span>
+                <span>{{ t('drive.detail_owner') }}:</span>
+                <span class="text-foreground font-medium">{{ t('drive.me') }}</span>
               </div>
               <div class="flex justify-between">
-                <span>Sửa đổi:</span>
+                <span>{{ t('drive.detail_modified') }}:</span>
                 <span class="text-foreground font-medium">
                   {{ items.find(i => i.id === selectedItemId)?.modifiedDate }}
                 </span>
               </div>
               <div class="flex justify-between">
-                <span>Vị trí:</span>
-                <span class="text-foreground font-medium">Drive của tôi</span>
+                <span>{{ t('drive.detail_location') }}:</span>
+                <span class="text-foreground font-medium">{{ t('drive.nav_my_drive') }}</span>
               </div>
             </div>
           </div>
           <div v-else class="text-center py-12 text-xs text-muted-foreground">
-            Chọn một tệp hoặc thư mục để xem thông tin chi tiết.
+            {{ t('drive.detail_select_prompt') }}
           </div>
         </aside>
       </div>
