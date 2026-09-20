@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -120,7 +120,7 @@ interface SuggestedFile {
   modifiedTime: string
 }
 
-const suggestedFiles = ref<SuggestedFile[]>([
+const suggestedFiles = computed<SuggestedFile[]>(() => [
   {
     id: '1',
     name: 'Ngô Tuấn Anh - Weekly Report.docx',
@@ -159,7 +159,7 @@ const suggestedFiles = ref<SuggestedFile[]>([
     cloudName: 'OneDrive',
     cloudColor: 'text-blue-500',
     size: '2.4 MB',
-    modifiedTime: 'Hôm nay, 10:15',
+    modifiedTime: t('home.time_today_at', { time: '10:15' }),
   },
 ])
 
@@ -173,40 +173,40 @@ interface RecentActivity {
   iconColor: string
 }
 
-const activities = ref<RecentActivity[]>([
+const activities = computed<RecentActivity[]>(() => [
   {
     id: '1',
-    action: 'Đã tải lên tệp',
+    action: t('home.act_uploaded'),
     target: 'Ngô Tuấn Anh - Weekly Report.docx',
     cloud: 'Google Drive',
-    time: '2 giờ trước',
+    time: t('home.time_hours_ago', { n: 2 }),
     icon: Upload,
     iconColor: 'text-blue-500',
   },
   {
     id: '2',
-    action: 'Đã đồng bộ tự động 14 tệp',
+    action: t('home.act_synced'),
     target: 'Assets & Media Cache',
     cloud: 'Ponta Storage',
-    time: '5 giờ trước',
+    time: t('home.time_hours_ago', { n: 5 }),
     icon: RefreshCw,
     iconColor: 'text-emerald-500',
   },
   {
     id: '3',
-    action: 'Đã chia sẻ liên kết',
+    action: t('home.act_shared'),
     target: 'NgoTuanAnh_PhanMemVaUngDungCongNgheSo.jpg',
     cloud: 'Ponta Storage',
-    time: 'Hôm qua',
+    time: t('home.time_yesterday'),
     icon: Share2,
     iconColor: 'text-purple-500',
   },
   {
     id: '4',
-    action: 'Đã tạo thư mục mới',
+    action: t('home.act_created_folder'),
     target: 'Colab Notebooks',
     cloud: 'OneDrive',
-    time: '3 ngày trước',
+    time: t('home.time_days_ago', { n: 3 }),
     icon: FolderPlus,
     iconColor: 'text-amber-500',
   },
@@ -449,7 +449,7 @@ function handleAddCloud() {
                     <span class="font-semibold">{{ act.target }}</span>
                   </p>
                   <p class="text-[11px] text-muted-foreground mt-0.5">
-                    Lưu trữ trên <span class="font-medium text-foreground">{{ act.cloud }}</span>
+                    {{ t('home.stored_on') }} <span class="font-medium text-foreground">{{ act.cloud }}</span>
                   </p>
                 </div>
               </div>
@@ -470,10 +470,10 @@ function handleAddCloud() {
               </div>
               <div>
                 <h3 class="font-bold text-foreground text-sm">
-                  Dung lượng hợp nhất
+                  {{ t('home.unified_storage') }}
                 </h3>
                 <p class="text-[11px] text-muted-foreground">
-                  Tổng hợp từ 4 tài khoản Cloud
+                  {{ t('home.aggregated_from_clouds', { count: 4 }) }}
                 </p>
               </div>
             </div>
@@ -484,7 +484,7 @@ function handleAddCloud() {
                 789.9 GB <span class="text-xs font-medium text-muted-foreground">/ 5.12 TB</span>
               </div>
               <p class="text-xs text-muted-foreground">
-                Đã dùng 15.4% tổng không gian đa đám mây
+                {{ t('home.used_percent_storage', { percent: '15.4%' }) }}
               </p>
             </div>
 
@@ -525,7 +525,7 @@ function handleAddCloud() {
             class="w-full rounded-xl gap-2 font-semibold border-border hover:bg-accent cursor-pointer"
             @click="navigateToDrive()"
           >
-            <span>Quản lý không gian Drive</span>
+            <span>{{ t('home.manage_drive_storage') }}</span>
             <ArrowUpRight class="h-4 w-4" />
           </Button>
         </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Globe, Check } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -12,10 +13,10 @@ import { setAppLocale, type SupportedLocale } from '@/i18n'
 
 const { locale, t } = useI18n()
 
-const languages: { label: string; value: SupportedLocale; code: string }[] = [
-  { label: 'Tiếng Việt', value: 'vi', code: 'VI' },
-  { label: 'English', value: 'en', code: 'EN' },
-]
+const languages = computed<{ label: string; value: SupportedLocale; code: string }[]>(() => [
+  { label: t('common.vietnamese'), value: 'vi', code: 'VI' },
+  { label: t('common.english'), value: 'en', code: 'EN' },
+])
 
 function onSelectLanguage(newLocale: SupportedLocale) {
   setAppLocale(newLocale)
