@@ -83,10 +83,17 @@
     "act_synced": "Auto-synced 14 files",
     "act_shared": "Shared link",
     "act_created_folder": "Created new folder",
+    "act_sync_started": "Started syncing",
+    "act_renamed": "Renamed",
+    "act_deleted": "Deleted",
+    "act_permanently_deleted": "Permanently deleted",
     "time_today_at": "Today, {time}",
+    "time_just_now": "Just now",
+    "time_minutes_ago": "{n} minutes ago",
     "time_hours_ago": "{n} hours ago",
     "time_yesterday": "Yesterday",
-    "time_days_ago": "{n} days ago"
+    "time_days_ago": "{n} days ago",
+    "load_failed": "Could not load your dashboard. Please try again later."
   },
   "drive": {
     "search_placeholder": "Search in Drive",

@@ -83,10 +83,17 @@
     "act_synced": "Đã đồng bộ tự động 14 tệp",
     "act_shared": "Đã chia sẻ liên kết",
     "act_created_folder": "Đã tạo thư mục mới",
+    "act_sync_started": "Đã bắt đầu đồng bộ",
+    "act_renamed": "Đã đổi tên",
+    "act_deleted": "Đã xóa",
+    "act_permanently_deleted": "Đã xóa vĩnh viễn",
     "time_today_at": "Hôm nay, {time}",
+    "time_just_now": "Vừa xong",
+    "time_minutes_ago": "{n} phút trước",
     "time_hours_ago": "{n} giờ trước",
     "time_yesterday": "Hôm qua",
-    "time_days_ago": "{n} ngày trước"
+    "time_days_ago": "{n} ngày trước",
+    "load_failed": "Không thể tải dữ liệu tổng quan. Vui lòng thử lại sau."
   },
   "drive": {
     "search_placeholder": "Tìm kiếm trong Drive",
