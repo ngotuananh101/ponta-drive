@@ -8,13 +8,10 @@ import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import { Button } from '@/components/ui/button'
 import {
   Cloud,
-  Database,
-  Server,
   FileText,
   ImageIcon,
   FileArchive,
   ArrowUpRight,
-  Clock,
   Plus,
   Upload,
   FolderPlus,
@@ -23,17 +20,18 @@ import {
   RefreshCw,
   Sparkles,
   Share2,
+  Pencil,
+  Trash2,
+  HardDriveDownload,
 } from 'lucide-vue-next'
+import { fetchDashboardSummary, type CloudAccount, type DashboardSummary } from '@/api/dashboard'
 
-const { t } = useI18n()
+const { t, te, locale } = useI18n()
 const authStore = useAuthStore()
 const router = useRouter()
 
-onMounted(async () => {
-  if (!authStore.user) {
-    await authStore.fetchUser()
-  }
-})
+const loading = ref(true)
+const dashboard = ref<DashboardSummary | null>(null)
 
 interface CloudStorageSummary {
   id: string
@@ -50,65 +48,6 @@ interface CloudStorageSummary {
   badge?: string
 }
 
-const clouds = ref<CloudStorageSummary[]>([
-  {
-    id: 'google_drive',
-    name: 'Google Drive',
-    account: 'tuananh.ngo@gmail.com',
-    icon: Cloud,
-    colorClass: 'text-amber-500',
-    bgColorClass: 'bg-amber-500/10 border-amber-500/20',
-    progressColorClass: 'bg-amber-500',
-    used: '12.4 GB',
-    total: '15 GB',
-    percent: 82,
-    status: 'active',
-    badge: 'Google',
-  },
-  {
-    id: 'onedrive',
-    name: 'OneDrive',
-    account: 'anhnt.work@outlook.com',
-    icon: Cloud,
-    colorClass: 'text-blue-500',
-    bgColorClass: 'bg-blue-500/10 border-blue-500/20',
-    progressColorClass: 'bg-blue-500',
-    used: '3.1 GB',
-    total: '5 GB',
-    percent: 62,
-    status: 'syncing',
-    badge: 'Microsoft',
-  },
-  {
-    id: 'cloudflare_r2',
-    name: 'Cloudflare R2',
-    account: 'ponta-bucket-prod',
-    icon: Database,
-    colorClass: 'text-orange-500',
-    bgColorClass: 'bg-orange-500/10 border-orange-500/20',
-    progressColorClass: 'bg-orange-500',
-    used: '42.0 GB',
-    total: '100 GB',
-    percent: 42,
-    status: 'active',
-    badge: 'S3 API',
-  },
-  {
-    id: 'ponta_storage',
-    name: 'Ponta Storage',
-    account: 'ponta-drive-selfhost',
-    icon: Server,
-    colorClass: 'text-emerald-500',
-    bgColorClass: 'bg-emerald-500/10 border-emerald-500/20',
-    progressColorClass: 'bg-emerald-500',
-    used: '733.4 GB',
-    total: '5 TB',
-    percent: 14.6,
-    status: 'active',
-    badge: 'Default',
-  },
-])
-
 interface SuggestedFile {
   id: string
   name: string
@@ -120,49 +59,6 @@ interface SuggestedFile {
   modifiedTime: string
 }
 
-const suggestedFiles = computed<SuggestedFile[]>(() => [
-  {
-    id: '1',
-    name: 'Ngô Tuấn Anh - Weekly Report.docx',
-    type: 'doc',
-    cloudId: 'google_drive',
-    cloudName: 'Google Drive',
-    cloudColor: 'text-amber-500',
-    size: '142 KB',
-    modifiedTime: '28 Th1, 2026',
-  },
-  {
-    id: '2',
-    name: 'NgoTuanAnh_PhanMemVaUngDungCongNgheSo.jpg',
-    type: 'image',
-    cloudId: 'ponta_storage',
-    cloudName: 'Ponta Storage',
-    cloudColor: 'text-emerald-500',
-    size: '34 KB',
-    modifiedTime: '29 Th12, 2025',
-  },
-  {
-    id: '3',
-    name: 'VieNeu-TTS-v2.0.zip',
-    type: 'archive',
-    cloudId: 'cloudflare_r2',
-    cloudName: 'Cloudflare R2',
-    cloudColor: 'text-orange-500',
-    size: '1.2 GB',
-    modifiedTime: '6 Th9, 2025',
-  },
-  {
-    id: '4',
-    name: 'Ponta_Drive_Architecture_Specs.pdf',
-    type: 'doc',
-    cloudId: 'onedrive',
-    cloudName: 'OneDrive',
-    cloudColor: 'text-blue-500',
-    size: '2.4 MB',
-    modifiedTime: t('home.time_today_at', { time: '10:15' }),
-  },
-])
-
 interface RecentActivity {
   id: string
   action: string
@@ -173,44 +69,197 @@ interface RecentActivity {
   iconColor: string
 }
 
-const activities = computed<RecentActivity[]>(() => [
-  {
-    id: '1',
-    action: t('home.act_uploaded'),
-    target: 'Ngô Tuấn Anh - Weekly Report.docx',
-    cloud: 'Google Drive',
-    time: t('home.time_hours_ago', { n: 2 }),
-    icon: Upload,
-    iconColor: 'text-blue-500',
-  },
-  {
-    id: '2',
-    action: t('home.act_synced'),
-    target: 'Assets & Media Cache',
-    cloud: 'Ponta Storage',
-    time: t('home.time_hours_ago', { n: 5 }),
-    icon: RefreshCw,
-    iconColor: 'text-emerald-500',
-  },
-  {
-    id: '3',
-    action: t('home.act_shared'),
-    target: 'NgoTuanAnh_PhanMemVaUngDungCongNgheSo.jpg',
-    cloud: 'Ponta Storage',
-    time: t('home.time_yesterday'),
-    icon: Share2,
-    iconColor: 'text-purple-500',
-  },
-  {
-    id: '4',
-    action: t('home.act_created_folder'),
-    target: 'Colab Notebooks',
-    cloud: 'OneDrive',
-    time: t('home.time_days_ago', { n: 3 }),
-    icon: FolderPlus,
-    iconColor: 'text-amber-500',
-  },
-])
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchUser()
+  }
+
+  try {
+    const response = await fetchDashboardSummary()
+    if (response.data) {
+      dashboard.value = response.data
+    }
+  } catch {
+    toast.error(t('home.load_failed'))
+  } finally {
+    loading.value = false
+  }
+})
+
+/** Formats a byte count into a compact human-readable string (binary units). */
+function humanizeBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B'
+  const GB = 1073741824
+  const MB = 1048576
+  if (bytes >= GB) return `${(bytes / GB).toFixed(1)} GB`
+  if (bytes >= MB) return `${(bytes / MB).toFixed(0)} MB`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${bytes} B`
+}
+
+/** Formats an ISO timestamp for display, falling back to the raw value. */
+function formatDate(value: string): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString(locale.value === 'vi' ? 'vi-VN' : 'en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+/** Formats a timestamp as a short relative time, e.g. "5m ago" / "3d ago". */
+function formatRelativeTime(value: string): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  const diffMs = Date.now() - date.getTime()
+  if (diffMs < 0) return t('home.time_just_now')
+
+  const minutes = Math.floor(diffMs / 60000)
+  if (minutes < 1) return t('home.time_just_now')
+  if (minutes < 60) return t('home.time_minutes_ago', { n: minutes })
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return t('home.time_hours_ago', { n: hours })
+
+  const days = Math.floor(hours / 24)
+  if (days < 30) return t('home.time_days_ago', { n: days })
+
+  return formatDate(value)
+}
+
+/** Maps a backend activity action to a lucide icon component. */
+function activityIcon(action: string) {
+  switch (action) {
+    case 'uploaded':
+      return Upload
+    case 'synced':
+    case 'sync_started':
+      return RefreshCw
+    case 'renamed':
+      return Pencil
+    case 'deleted':
+    case 'permanently_deleted':
+      return Trash2
+    case 'created_folder':
+      return FolderPlus
+    case 'shared':
+      return Share2
+    default:
+      return HardDriveDownload
+  }
+}
+
+/** Maps a backend activity action to an accent color class. */
+function activityIconColor(action: string) {
+  switch (action) {
+    case 'uploaded':
+      return 'text-blue-500'
+    case 'synced':
+    case 'sync_started':
+      return 'text-emerald-500'
+    case 'renamed':
+      return 'text-amber-500'
+    case 'deleted':
+    case 'permanently_deleted':
+      return 'text-rose-500'
+    case 'created_folder':
+      return 'text-amber-500'
+    case 'shared':
+      return 'text-purple-500'
+    default:
+      return 'text-emerald-500'
+  }
+}
+
+const clouds = computed<CloudStorageSummary[]>(() =>
+  (dashboard.value?.clouds ?? []).map((account: CloudAccount) => ({
+    id: String(account.id),
+    name: account.name,
+    account: account.provider,
+    icon: Cloud,
+    colorClass: 'text-emerald-500',
+    bgColorClass: 'bg-emerald-500/10 border-emerald-500/20',
+    progressColorClass: 'bg-emerald-500',
+    used: humanizeBytes(account.used_storage),
+    total: humanizeBytes(account.total_storage),
+    percent:
+      account.total_storage > 0
+        ? Math.min(100, (account.used_storage / account.total_storage) * 100)
+        : 0,
+    status: account.sync_status === 'syncing' ? 'syncing' : 'active',
+    badge: account.is_default ? 'Default' : account.provider,
+  })),
+)
+
+const suggestedFiles = computed<SuggestedFile[]>(() =>
+  (dashboard.value?.suggested_files ?? []).map((item) => {
+    const owner = clouds.value.find((cloud) => cloud.id === String(item.cloud_account_id))
+    const mime = item.mime_type || ''
+    let type: SuggestedFile['type'] = 'doc'
+    if (mime.startsWith('image/')) {
+      type = 'image'
+    } else if (mime.includes('zip') || mime.includes('compressed')) {
+      type = 'archive'
+    }
+
+    return {
+      id: item.uuid,
+      name: item.name,
+      type,
+      cloudId: String(item.cloud_account_id),
+      cloudName: owner?.name || '—',
+      cloudColor: 'text-emerald-500',
+      size: humanizeBytes(item.size),
+      modifiedTime: formatDate(item.updated_at),
+    }
+  }),
+)
+
+const activities = computed<RecentActivity[]>(() =>
+  (dashboard.value?.recent_activities ?? []).map((act) => {
+    const key = `home.act_${act.action}`
+    return {
+      id: String(act.id),
+      action: te(key) ? t(key) : act.action,
+      target: act.target_name || '—',
+      cloud: clouds.value.find((cloud) => cloud.id === String(act.cloud_id))?.name || '—',
+      time: formatRelativeTime(act.created_at),
+      icon: activityIcon(act.action),
+      iconColor: activityIconColor(act.action),
+    }
+  }),
+)
+
+const storage = computed(() => dashboard.value?.total_storage)
+
+/** Palette used by the consolidated storage bar and legend, cycled per cloud. */
+const BREAKDOWN_COLORS = [
+  'bg-amber-500',
+  'bg-blue-500',
+  'bg-orange-500',
+  'bg-emerald-500',
+  'bg-purple-500',
+]
+
+const storageBreakdown = computed(() => {
+  const total = storage.value?.total_bytes ?? 0
+  return (dashboard.value?.clouds ?? []).map((account, index) => ({
+    id: account.id,
+    name: account.name,
+    used: humanizeBytes(account.used_storage),
+    colorClass: BREAKDOWN_COLORS[index % BREAKDOWN_COLORS.length],
+    percent: total > 0 ? (account.used_storage / total) * 100 : 0,
+  }))
+})
+
+const storagePercent = computed(() => {
+  const percent = storage.value?.percent ?? 0
+  return Math.min(100, Math.max(0, percent))
+})
 
 function navigateToDrive(cloudId?: string) {
   if (cloudId) {
@@ -227,7 +276,10 @@ function handleAddCloud() {
 
 <template>
   <DashboardLayout>
-    <div class="flex flex-col gap-8 pb-10">
+    <div
+      class="flex flex-col gap-8 pb-10 transition-opacity duration-200"
+      :class="loading ? 'opacity-60' : 'opacity-100'"
+    >
       <!-- 1. Hero Welcome Banner -->
       <div class="relative overflow-hidden rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-xs">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 relative z-10">
@@ -473,7 +525,7 @@ function handleAddCloud() {
                   {{ t('home.unified_storage') }}
                 </h3>
                 <p class="text-[11px] text-muted-foreground">
-                  {{ t('home.aggregated_from_clouds', { count: 4 }) }}
+                  {{ t('home.aggregated_from_clouds', { count: clouds.length }) }}
                 </p>
               </div>
             </div>
@@ -481,39 +533,40 @@ function handleAddCloud() {
             <!-- Big Stat -->
             <div class="space-y-1">
               <div class="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
-                789.9 GB <span class="text-xs font-medium text-muted-foreground">/ 5.12 TB</span>
+                {{ storage?.used_human ?? '—' }}
+                <span class="text-xs font-medium text-muted-foreground">
+                  / {{ storage?.total_human ?? '—' }}
+                </span>
               </div>
               <p class="text-xs text-muted-foreground">
-                {{ t('home.used_percent_storage', { percent: '15.4%' }) }}
+                {{ t('home.used_percent_storage', { percent: storagePercent.toFixed(1) + '%' }) }}
               </p>
             </div>
 
             <!-- Multi-colored Consolidated Progress Bar -->
             <div class="space-y-2">
               <div class="w-full h-2.5 bg-muted rounded-full overflow-hidden flex">
-                <div class="bg-amber-500 h-full" style="width: 2.5%" title="Google Drive (12.4 GB)" />
-                <div class="bg-blue-500 h-full" style="width: 1.2%" title="OneDrive (3.1 GB)" />
-                <div class="bg-orange-500 h-full" style="width: 4.8%" title="Cloudflare R2 (42 GB)" />
-                <div class="bg-emerald-500 h-full" style="width: 14.3%" title="Ponta Storage (733.4 GB)" />
+                <div
+                  v-for="segment in storageBreakdown"
+                  :key="segment.id"
+                  class="h-full"
+                  :class="segment.colorClass"
+                  :style="{ width: `${segment.percent}%` }"
+                  :title="`${segment.name} (${segment.used})`"
+                />
               </div>
 
               <!-- Storage Breakdown Legend -->
               <div class="grid grid-cols-2 gap-2 text-[11px] pt-2">
-                <div class="flex items-center gap-1.5">
-                  <div class="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
-                  <span class="text-muted-foreground truncate">Google Drive: 12.4G</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <div class="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
-                  <span class="text-muted-foreground truncate">OneDrive: 3.1G</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <div class="h-2 w-2 rounded-full bg-orange-500 shrink-0" />
-                  <span class="text-muted-foreground truncate">R2 S3: 42.0G</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <div class="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span class="text-muted-foreground truncate">Ponta: 733.4G</span>
+                <div
+                  v-for="segment in storageBreakdown"
+                  :key="segment.id"
+                  class="flex items-center gap-1.5"
+                >
+                  <div class="h-2 w-2 rounded-full shrink-0" :class="segment.colorClass" />
+                  <span class="text-muted-foreground truncate">
+                    {{ segment.name }}: {{ segment.used }}
+                  </span>
                 </div>
               </div>
             </div>
