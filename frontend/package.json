@@ -17,14 +17,14 @@
     "test:run": "vitest run"
   },
   "dependencies": {
-    "@lucide/vue": "^1.47.0",
+    "@lucide/vue": "^1.49.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vueuse/core": "^15.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-vue-next": "^1.0.0",
     "pinia": "^4.0.3",
-    "reka-ui": "^2.10.4",
+    "reka-ui": "^2.10.5",
     "shadcn-vue": "^2.8.2",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
