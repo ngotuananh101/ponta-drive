@@ -44,7 +44,7 @@ interface CloudStorageSummary {
   used: string
   total: string
   percent: number
-  status: 'active' | 'syncing'
+  status: 'active' | 'syncing' | 'error'
   badge?: string
 }
 
@@ -190,7 +190,7 @@ const clouds = computed<CloudStorageSummary[]>(() =>
       account.total_storage > 0
         ? Math.min(100, (account.used_storage / account.total_storage) * 100)
         : 0,
-    status: account.sync_status === 'syncing' ? 'syncing' : 'active',
+    status: account.sync_status === 'syncing' ? 'syncing' : account.sync_status === 'error' ? 'error' : 'active',
     badge: account.is_default ? 'Default' : account.provider,
   })),
 )
@@ -365,8 +365,12 @@ function handleAddCloud() {
                   </span>
                   <div
                     class="h-2 w-2 rounded-full"
-                    :class="cloud.status === 'active' ? 'bg-emerald-500' : 'bg-blue-500 animate-pulse'"
-                    :title="cloud.status === 'active' ? t('home.status_connected') : t('home.status_syncing')"
+                    :class="{
+                      'bg-emerald-500': cloud.status === 'active',
+                      'bg-blue-500 animate-pulse': cloud.status === 'syncing',
+                      'bg-red-500': cloud.status === 'error',
+                    }"
+                    :title="t(`home.status_${cloud.status}`)"
                   />
                 </div>
               </div>

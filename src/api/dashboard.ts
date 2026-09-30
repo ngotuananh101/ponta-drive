@@ -31,6 +31,8 @@ export interface Activity {
   cloud_id: number | null
   ip_address: string
   user_agent: string
+  /** Action-specific payload (e.g. `{ items_count: 12 }`), null when absent. */
+  metadata: Record<string, unknown> | null
   created_at: string
 }
 
