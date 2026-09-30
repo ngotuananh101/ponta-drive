@@ -1,16 +1,7 @@
 import { fetchApi, type ApiResponse } from './client'
+import { type CloudAccount } from './cloudAccounts'
 
-export interface CloudAccount {
-  id: number
-  name: string
-  provider: string
-  sync_status: 'idle' | 'syncing' | 'error'
-  total_storage: number
-  used_storage: number
-  last_synced_at: string | null
-  is_default: boolean
-  is_active: boolean
-}
+export type { CloudAccount }
 
 export interface DriveItem {
   uuid: string
