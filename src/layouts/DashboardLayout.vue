@@ -58,7 +58,7 @@ onMounted(() => {
 const isMobileMenuOpen = ref(false)
 const searchQuery = ref('')
 const isMyDriveOpen = ref(true)
-const activeCloudId = ref('google_drive')
+const activeCloudId = computed(() => (route.query.cloud as string) || '')
 
 const activeNav = computed(() => {
   if (route.name === 'home') return 'home'
@@ -270,19 +270,21 @@ async function handleLogout() {
                     {{ t('cloud.badge_default') }}
                   </span>
                 </button>
-
-                <!-- "+ Thêm Cloud" Action Button -->
-                <button
-                  type="button"
-                  class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors group cursor-pointer"
-                  @click="handleAddCloud"
-                >
-                  <div class="flex h-4 w-4 items-center justify-center rounded border border-dashed border-border group-hover:border-primary/70 shrink-0">
-                    <Plus class="h-2.5 w-2.5 text-muted-foreground group-hover:text-primary" />
-                  </div>
-                  <span class="truncate font-normal">{{ t('drive.add_cloud') }}</span>
-                </button>
               </template>
+
+              <!-- "+ Thêm Cloud" Action Button - renders unconditionally below
+                   the accounts list (or empty message) so it is always
+                   reachable, including when there are 0 accounts. -->
+              <button
+                type="button"
+                class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors group cursor-pointer"
+                @click="handleAddCloud"
+              >
+                <div class="flex h-4 w-4 items-center justify-center rounded border border-dashed border-border group-hover:border-primary/70 shrink-0">
+                  <Plus class="h-2.5 w-2.5 text-muted-foreground group-hover:text-primary" />
+                </div>
+                <span class="truncate font-normal">{{ t('drive.add_cloud') }}</span>
+              </button>
             </div>
           </div>
         </template>

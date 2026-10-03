@@ -17,6 +17,11 @@ export function useDriveItems(query: () => DriveListQuery, debounceMs = 250) {
 
   let timer: ReturnType<typeof setTimeout> | null = null
 
+  // The first fetch is immediate; only subsequent reactive query changes are
+  // debounced. A 250ms delay on the first paint would visibly stall the list,
+  // but a rapid search-typing blur after mount is fine to wait out.
+  void store.loadFirstPage(query())
+
   watch(
     () => JSON.stringify(query()),
     () => {
@@ -25,7 +30,6 @@ export function useDriveItems(query: () => DriveListQuery, debounceMs = 250) {
         void store.loadFirstPage(query())
       }, debounceMs)
     },
-    { immediate: true },
   )
 
   function loadMore(): void {

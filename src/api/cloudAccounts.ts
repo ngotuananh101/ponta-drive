@@ -53,6 +53,9 @@ export async function testCloudAccount(payload: CloudAccountPayload): Promise<Ap
   })
 }
 
+/** The payload for updating an existing cloud account. */
+export type UpdateCloudAccountPayload = Partial<Omit<CloudAccountPayload, 'provider'>>
+
 export async function createCloudAccount(
   payload: CloudAccountPayload,
 ): Promise<ApiResponse<CloudAccount>> {
@@ -73,7 +76,7 @@ export async function getCloudAccount(id: number): Promise<ApiResponse<CloudAcco
  */
 export async function updateCloudAccount(
   id: number,
-  payload: Partial<CloudAccountPayload>,
+  payload: UpdateCloudAccountPayload,
 ): Promise<ApiResponse<CloudAccount>> {
   return fetchApi<ApiResponse<CloudAccount>>(`/v1/cloud-accounts/${id}`, {
     method: 'PUT',

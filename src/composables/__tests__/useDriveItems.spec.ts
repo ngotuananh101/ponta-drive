@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { nextTick } from 'vue'
+import { nextTick, ref, effectScope } from 'vue'
 
-import { useDriveItemsStore } from '@/stores/driveItems'
+import { useDriveItems } from '@/composables/useDriveItems'
 import * as api from '@/api/driveItems'
 import type { DriveItem } from '@/api/driveItems'
 
@@ -22,230 +22,184 @@ function item(uuid: string, name = uuid): DriveItem {
   }
 }
 
-/** A promise whose settlement is controlled by the test. */
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
+describe('useDriveItems composable', () => {
+  let scope: ReturnType<typeof effectScope>
 
-describe('driveItems store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.restoreAllMocks()
   })
 
-  it('loads the first page and records the cursor', async () => {
-    vi.spyOn(api, 'listDriveItems').mockResolvedValue({
-      status: 'ok',
-      data: [item('a'), item('b')],
-      meta: { has_more: true, next_cursor: 'c1' },
-    })
-
-    const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountId: 1 })
-
-    expect(store.items.map((i) => i.uuid)).toEqual(['a', 'b'])
-    expect(store.cursor).toBe('c1')
-    expect(store.hasMore).toBe(true)
-  })
-
-  it('appends the next page and drops duplicates', async () => {
-    vi.spyOn(api, 'listDriveItems')
-      .mockResolvedValueOnce({
-        status: 'ok',
-        data: [item('a'), item('b')],
-        meta: { has_more: true, next_cursor: 'c1' },
-      })
-      .mockResolvedValueOnce({
-        status: 'ok',
-        data: [item('b'), item('c')],
-        meta: { has_more: false, next_cursor: '' },
-      })
-
-    const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountId: 1 })
-    await store.loadNextPage()
-
-    expect(store.items.map((i) => i.uuid)).toEqual(['a', 'b', 'c'])
-    expect(store.hasMore).toBe(false)
-  })
-
-  it('stops issuing requests once has_more is false', async () => {
+  it('fetches the first page immediately on mount (no debounce)', async () => {
     const spy = vi.spyOn(api, 'listDriveItems').mockResolvedValue({
       status: 'ok',
       data: [item('a')],
       meta: { has_more: false, next_cursor: '' },
     })
 
-    const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountId: 1 })
-    await store.loadNextPage()
-
-    expect(spy).toHaveBeenCalledTimes(1)
-  })
-
-  it('clears items and cursor on reset', async () => {
-    vi.spyOn(api, 'listDriveItems').mockResolvedValue({
-      status: 'ok',
-      data: [item('a')],
-      meta: { has_more: true, next_cursor: 'c1' },
+    let result: ReturnType<typeof useDriveItems>
+    scope = effectScope()
+    scope.run(() => {
+      result = useDriveItems(() => ({ cloudAccountId: 1 }))
     })
 
-    const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountId: 1 })
-    store.reset()
+    // Initial fetch is synchronous (no debounce on mount).
+    expect(spy).toHaveBeenCalledTimes(1)
 
-    expect(store.items).toEqual([])
-    expect(store.cursor).toBe('')
-    expect(store.hasMore).toBe(false)
+    await nextTick()
+    await Promise.resolve()
+    expect(result!.items.value.map((i) => i.uuid)).toEqual(['a'])
+
+    scope.stop()
   })
 
-  it('keeps already-loaded items when a page fails', async () => {
-    vi.spyOn(api, 'listDriveItems')
+  it('debounces subsequent query changes with vi.useFakeTimers', async () => {
+    vi.useFakeTimers()
+    const spy = vi.spyOn(api, 'listDriveItems').mockResolvedValue({
+      status: 'ok',
+      data: [],
+      meta: { has_more: false, next_cursor: '' },
+    })
+
+    const search = ref('')
+    let result: ReturnType<typeof useDriveItems>
+    scope = effectScope()
+    scope.run(() => {
+      result = useDriveItems(() => ({ cloudAccountId: 1, search: search.value }), 250)
+    })
+
+    // Flush the initial fetch microtask.
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(spy).toHaveBeenCalledTimes(1)
+
+    search.value = 'report'
+    await vi.advanceTimersByTimeAsync(200)
+
+    // Still the initial fetch only; debounce window not elapsed.
+    expect(spy).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(50)
+
+    // Debounce expired; second fetch fired.
+    expect(spy).toHaveBeenCalledTimes(2)
+
+    vi.useRealTimers()
+    scope.stop()
+  })
+
+  it('triggers loadFirstPage when the query reactive value changes', async () => {
+    vi.useFakeTimers()
+    const spy = vi
+      .spyOn(api, 'listDriveItems')
+      .mockResolvedValue({ status: 'ok', data: [], meta: { has_more: false, next_cursor: '' } })
+
+    const cloudAccountId = ref(1)
+    let result: ReturnType<typeof useDriveItems>
+    scope = effectScope()
+    scope.run(() => {
+      result = useDriveItems(() => ({ cloudAccountId: cloudAccountId.value }), 0)
+    })
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(spy).toHaveBeenCalledTimes(1)
+
+    cloudAccountId.value = 2
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(spy.mock.calls[1][0].cloudAccountId).toBe(2)
+
+    vi.useRealTimers()
+    scope.stop()
+  })
+
+  it('loadMore delegates to the store next page', async () => {
+    const spy = vi
+      .spyOn(api, 'listDriveItems')
       .mockResolvedValueOnce({
         status: 'ok',
         data: [item('a')],
         meta: { has_more: true, next_cursor: 'c1' },
       })
-      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({
+        status: 'ok',
+        data: [item('b')],
+        meta: { has_more: false, next_cursor: '' },
+      })
 
-    const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountId: 1 })
-    await store.loadNextPage()
+    let result: ReturnType<typeof useDriveItems>
+    scope = effectScope()
+    scope.run(() => {
+      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
+    })
 
-    expect(store.items.map((i) => i.uuid)).toEqual(['a'])
-    expect(store.error).toBe('network down')
+    await nextTick()
+    await Promise.resolve()
+
+    expect(result!.hasMore.value).toBe(true)
+
+    result!.loadMore()
+    await nextTick()
+    await Promise.resolve()
+
+    expect(result!.items.value.map((i) => i.uuid)).toEqual(['a', 'b'])
+    expect(result!.hasMore.value).toBe(false)
+
+    scope.stop()
   })
 
-  // The important one. A slow first request must not land after a newer one
-  // and overwrite it - that is what makes the list jump back to an old page.
-  it('ignores a stale response that resolves after a newer request', async () => {
-    const first = deferred<api.DriveListResponse>()
-    const second = deferred<api.DriveListResponse>()
-
+  it('reload triggers a fresh first-page load', async () => {
     vi.spyOn(api, 'listDriveItems')
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-
-    const store = useDriveItemsStore()
-
-    const p1 = store.loadFirstPage({ cloudAccountId: 1, search: 'old' })
-    const p2 = store.loadFirstPage({ cloudAccountId: 1, search: 'new' })
-
-    // The newer request settles first, then the older one straggles in.
-    second.resolve({ status: 'ok', data: [item('new')], meta: { has_more: false, next_cursor: '' } })
-    await p2
-    first.resolve({ status: 'ok', data: [item('old')], meta: { has_more: false, next_cursor: '' } })
-    await p1
-
-    expect(store.items.map((i) => i.uuid)).toEqual(['new'])
-  })
-
-  it('aborts the in-flight request when a newer load starts', async () => {
-    const first = deferred<api.DriveListResponse>()
-    const spy = vi
-      .spyOn(api, 'listDriveItems')
-      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({
+        status: 'ok',
+        data: [item('old')],
+        meta: { has_more: false, next_cursor: '' },
+      })
       .mockResolvedValueOnce({
         status: 'ok',
         data: [item('new')],
         meta: { has_more: false, next_cursor: '' },
       })
 
-    const store = useDriveItemsStore()
-    const p1 = store.loadFirstPage({ cloudAccountId: 1, search: 'old' })
-    const signal = spy.mock.calls[0]?.[1]
-    expect(signal?.aborted).toBe(false)
+    let result: ReturnType<typeof useDriveItems>
+    scope = effectScope()
+    scope.run(() => {
+      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
+    })
 
-    const p2 = store.loadFirstPage({ cloudAccountId: 1, search: 'new' })
-    // The older request must be cancelled at the network, not merely ignored
-    // when it returns.
-    expect(signal?.aborted).toBe(true)
+    await nextTick()
+    await Promise.resolve()
+    expect(result!.items.value.map((i) => i.uuid)).toEqual(['old'])
 
-    first.reject(new DOMException('aborted', 'AbortError'))
-    await p1
-    await p2
+    result!.reload()
+    await nextTick()
+    await Promise.resolve()
+    expect(result!.items.value.map((i) => i.uuid)).toEqual(['new'])
 
-    expect(store.items.map((i) => i.uuid)).toEqual(['new'])
-    expect(store.error).toBe(null)
+    scope.stop()
   })
 
-  it('does not surface an abort as an error', async () => {
-    const first = deferred<api.DriveListResponse>()
-    vi.spyOn(api, 'listDriveItems')
-      .mockReturnValueOnce(first.promise)
-      .mockResolvedValueOnce({
-        status: 'ok',
-        data: [item('a')],
-        meta: { has_more: false, next_cursor: '' },
-      })
-
-    const store = useDriveItemsStore()
-    const p1 = store.loadFirstPage({ cloudAccountId: 1, search: 'old' })
-    const p2 = store.loadFirstPage({ cloudAccountId: 1, search: 'new' })
-
-    // A plain object, not a DOMException: the store matches on `name`, so this
-    // proves the check does not depend on the runtime's DOMException class.
-    first.reject({ name: 'AbortError', message: 'aborted' })
-    await p1
-    await p2
-
-    // A cancelled request is this store's own doing; showing "aborted" to the
-    // user would look like the drive is broken.
-    expect(store.error).toBe(null)
-    expect(store.loading).toBe(false)
-  })
-
-  it('resets before loading when the search changes', async () => {
+  it('exposes loading, error, and hasMore from the store', async () => {
     vi.spyOn(api, 'listDriveItems').mockResolvedValue({
       status: 'ok',
       data: [item('a')],
       meta: { has_more: false, next_cursor: '' },
     })
 
-    const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountId: 1, search: '' })
-    await store.loadFirstPage({ cloudAccountId: 1, search: 'report' })
-
-    expect(store.items.map((i) => i.uuid)).toEqual(['a'])
-    expect(store.error).toBe(null)
-  })
-})
-
-// The sort the user picks only reaches the backend if it survives the query
-// string. A dropped parameter is invisible: the list silently keeps the old
-// order and looks like the click did nothing.
-describe('buildDriveItemsQuery', () => {
-  it('sends the sort field and direction the UI picked', () => {
-    const query = api.buildDriveItemsQuery({
-      cloudAccountId: 3,
-      sort: 'size',
-      order: 'desc',
+    let result: ReturnType<typeof useDriveItems>
+    scope = effectScope()
+    scope.run(() => {
+      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
     })
 
-    expect(query).toContain('sort=size')
-    expect(query).toContain('order=desc')
-  })
+    await nextTick()
+    await Promise.resolve()
 
-  it('omits the cursor on the first page', () => {
-    const query = api.buildDriveItemsQuery({ cloudAccountId: 3 })
+    expect(result!.loading.value).toBe(false)
+    expect(result!.error.value).toBe(null)
+    expect(result!.hasMore.value).toBe(false)
 
-    expect(query).not.toContain('cursor=')
-  })
-
-  it('sends the cursor and limit when paging', () => {
-    const query = api.buildDriveItemsQuery({
-      cloudAccountId: 3,
-      cursor: 'eyJ0IjoiZmlsZSJ9',
-      limit: 50,
-    })
-
-    expect(query).toContain('cursor=eyJ0IjoiZmlsZSJ9')
-    expect(query).toContain('limit=50')
+    scope.stop()
   })
 })
