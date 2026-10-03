@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -55,6 +55,14 @@ const cloudAccountId = computed(() => {
   const raw = route.query.cloud
   const parsed = Number(raw)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+})
+
+// Switching cloud accounts from the sidebar must clear the folder chain and
+// selection; otherwise stale folder ids from the previous account leak into
+// the new query as `parent_id`, producing empty or incorrect results.
+watch(cloudAccountId, () => {
+  folderStack.value = []
+  selectedItemId.value = null
 })
 
 // The API has no path-based lookup, so the folder chain is tracked locally.
@@ -344,14 +352,14 @@ function formatSize(bytes: number): string {
                   </DropdownMenu>
                 </div>
               </div>
-            </div>
 
-            <!-- Infinite scroll sentinel -->
-            <div ref="sentinel" class="h-1" aria-hidden="true"></div>
+              <!-- Infinite scroll sentinel -->
+              <div ref="sentinel" class="h-1" aria-hidden="true"></div>
 
-            <div v-if="loading" class="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-              <Loader2 class="h-4 w-4 animate-spin" />
-              {{ t('common.loading') }}
+              <div v-if="loading" class="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 class="h-4 w-4 animate-spin" />
+                {{ t('common.loading') }}
+              </div>
             </div>
 
             <div v-else-if="error" class="flex flex-col items-center gap-3 py-6 text-sm">
