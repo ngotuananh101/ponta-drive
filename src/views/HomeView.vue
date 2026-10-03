@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
+import AddCloudDialog from '@/components/cloud/AddCloudDialog.vue'
 import { Button } from '@/components/ui/button'
 import {
   Cloud,
@@ -29,6 +30,8 @@ import { fetchDashboardSummary, type CloudAccount, type DashboardSummary } from 
 const { t, te, locale } = useI18n()
 const authStore = useAuthStore()
 const router = useRouter()
+
+const isAddCloudOpen = ref(false)
 
 const loading = ref(true)
 const dashboard = ref<DashboardSummary | null>(null)
@@ -270,7 +273,7 @@ function navigateToDrive(cloudId?: string) {
 }
 
 function handleAddCloud() {
-  toast.info(t('drive.add_cloud_desc'))
+  isAddCloudOpen.value = true
 }
 </script>
 
@@ -589,4 +592,6 @@ function handleAddCloud() {
       </div>
     </div>
   </DashboardLayout>
+
+  <AddCloudDialog v-model:open="isAddCloudOpen" />
 </template>
