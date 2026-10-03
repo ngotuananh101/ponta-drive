@@ -1,27 +1,9 @@
 import { fetchApi, type ApiResponse } from './client'
+import { type CloudAccount } from './cloudAccounts'
+import { type DriveItem } from './driveItems'
 
-export interface CloudAccount {
-  id: number
-  name: string
-  provider: string
-  sync_status: 'idle' | 'syncing' | 'error'
-  total_storage: number
-  used_storage: number
-  last_synced_at: string | null
-  is_default: boolean
-  is_active: boolean
-}
-
-export interface DriveItem {
-  uuid: string
-  name: string
-  type: 'file' | 'folder'
-  mime_type: string
-  size: number
-  cloud_account_id: number
-  updated_at: string
-  is_starred: boolean
-}
+export type { CloudAccount }
+export type { DriveItem }
 
 export interface Activity {
   id: number

@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import { Button } from '@/components/ui/button'
+import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
+import { useDriveItems } from '@/composables/useDriveItems'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,9 +17,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Folder,
-  FileText,
-  ImageIcon,
   MoreVertical,
   ChevronDown,
   List,
@@ -29,89 +31,125 @@ import {
   FolderPlus,
   Upload,
   FolderOpen,
+  Loader2,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
-
-onMounted(async () => {
-  if (!authStore.user) {
-    await authStore.fetchUser()
-  }
-})
+const cloudStore = useCloudAccountsStore()
 
 type ViewMode = 'list' | 'grid'
 const viewMode = ref<ViewMode>('list')
 const selectedItemId = ref<string | null>(null)
 const showDetails = ref(false)
+const search = ref('')
+const sort = ref('name')
+const order = ref('asc')
 
-interface DriveItem {
-  id: string
-  name: string
-  type: 'folder' | 'doc' | 'image'
-  folderColor?: string
-  owner: string
-  ownerAvatar?: string
-  modifiedDate: string
-  size: string
+// The account id lives in the URL, so a folder view is shareable and the back
+// button works. `0` means "no account selected yet" and the composable skips
+// the request in that case.
+const cloudAccountId = computed(() => {
+  const raw = route.query.cloud
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+})
+
+// Switching cloud accounts from the sidebar must clear the folder chain and
+// selection; otherwise stale folder ids from the previous account leak into
+// the new query as `parent_id`, producing empty or incorrect results.
+watch(cloudAccountId, () => {
+  folderStack.value = []
+  selectedItemId.value = null
+})
+
+// The API has no path-based lookup, so the folder chain is tracked locally.
+// `.at(-1)` rather than `[length - 1]`: with noUncheckedIndexedAccess an index
+// access is `T | undefined` and would need a non-null assertion to compile.
+const folderStack = ref<{ id: number; name: string }[]>([])
+const parentId = computed(() => folderStack.value.at(-1)?.id ?? null)
+
+const { items, loading, error, hasMore, loadMore, reload } = useDriveItems(() => ({
+  cloudAccountId: cloudAccountId.value,
+  parentId: parentId.value,
+  search: search.value,
+  sort: sort.value,
+  order: order.value,
+}))
+
+const folders = computed(() => items.value.filter((i) => i.type === 'folder'))
+const files = computed(() => items.value.filter((i) => i.type !== 'folder'))
+const selectedItem = computed(() => items.value.find((i) => i.uuid === selectedItemId.value) ?? null)
+
+/** `2026-10-01 00:00:00` -> `1 Oct 2026`, for the Modified column. */
+function formatDate(value: string): string {
+  const parsed = new Date(value.replace(' ', 'T'))
+  if (Number.isNaN(parsed.getTime())) return '—'
+  return parsed.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-const items = ref<DriveItem[]>([
-  {
-    id: '1',
-    name: 'VieNeu-TTS',
-    type: 'folder',
-    folderColor: 'text-zinc-400 dark:text-zinc-300',
-    owner: 'me',
-    modifiedDate: '6 Sept',
-    size: '—',
-  },
-  {
-    id: '2',
-    name: 'Colab Notebooks',
-    type: 'folder',
-    folderColor: 'text-amber-500 fill-amber-500/20',
-    owner: 'me',
-    modifiedDate: '16 Jul',
-    size: '—',
-  },
-  {
-    id: '3',
-    name: 'Google AI Studio',
-    type: 'folder',
-    folderColor: 'text-zinc-400 dark:text-zinc-300',
-    owner: 'me',
-    modifiedDate: '5 Jul',
-    size: '—',
-  },
-  {
-    id: '4',
-    name: 'Ngô Tuấn Anh - Weekly Report',
-    type: 'doc',
-    owner: 'me',
-    modifiedDate: '28 Jan',
-    size: '142 KB',
-  },
-  {
-    id: '5',
-    name: 'NgoTuanAnh_PhanMemVaUngDungCongNgheSo.jpg',
-    type: 'image',
-    owner: 'me',
-    modifiedDate: '29 Dec 2025',
-    size: '34 KB',
-  },
-  {
-    id: '6',
-    name: 'logo-red.png',
-    type: 'image',
-    owner: 'me',
-    modifiedDate: '8 Mar 2023',
-    size: '360 KB',
-  },
-])
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchUser()
+  }
+  if (cloudStore.accounts.length === 0) {
+    await cloudStore.fetch()
+  }
+  // No account in the URL: fall back to the default one. `?? null` is required
+  // because noUncheckedIndexedAccess types `accounts[0]` as possibly undefined
+  // and the length guard above does not narrow an indexed access.
+  if (cloudAccountId.value === 0 && cloudStore.accounts.length > 0) {
+    const fallback =
+      cloudStore.accounts.find((a) => a.is_default) ?? cloudStore.accounts[0] ?? null
+    if (fallback) {
+      void router.replace({ name: 'drive', query: { cloud: String(fallback.id) } })
+    }
+  }
+})
 
-function selectItem(id: string) {
-  selectedItemId.value = selectedItemId.value === id ? null : id
+// A sentinel at the end of the list triggers the next page. The observer
+// wiring lives in `useInfiniteScroll` because it has its own subtle failure
+// mode (see that file): the guard against a request already in flight stays
+// here, since only this view knows about `loading` and `hasMore`.
+const sentinel = ref<HTMLElement | null>(null)
+useInfiniteScroll(sentinel, () => {
+  if (hasMore.value && !loading.value) loadMore()
+})
+
+function selectItem(uuid: string) {
+  selectedItemId.value = selectedItemId.value === uuid ? null : uuid
+}
+
+function openFolder(uuid: string) {
+  const folder = items.value.find((i) => i.uuid === uuid)
+  if (!folder) return
+  // `parent_id` is the numeric `id`, not the `uuid`: the API has no
+  // path-based lookup, so the chain is tracked locally by id.
+  folderStack.value = [...folderStack.value, { id: folder.id, name: folder.name }]
+  selectedItemId.value = null
+}
+
+function goToCrumb(index: number) {
+  folderStack.value = folderStack.value.slice(0, index)
+  selectedItemId.value = null
+}
+
+function formatSize(bytes: number): string {
+  if (!bytes) return '—'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  // `units[unit]` is `string | undefined` under noUncheckedIndexedAccess, but
+  // the loop bound guarantees `unit <= units.length - 1`. A template literal
+  // accepts the union without error, so no assertion is needed. (Measured with
+  // tsc 6.0.3 and this project's flags.)
+  return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`
 }
 </script>
 
@@ -184,6 +222,23 @@ function selectItem(id: string) {
         </div>
       </div>
 
+      <!-- Breadcrumb -->
+      <nav v-if="folderStack.length" class="flex items-center gap-1 text-sm text-muted-foreground">
+        <button type="button" class="hover:text-foreground cursor-pointer" @click="goToCrumb(0)">
+          {{ t('drive.nav_my_drive') }}
+        </button>
+        <template v-for="(crumb, index) in folderStack" :key="crumb.id">
+          <span>/</span>
+          <button
+            type="button"
+            class="hover:text-foreground cursor-pointer"
+            @click="goToCrumb(index + 1)"
+          >
+            {{ crumb.name }}
+          </button>
+        </template>
+      </nav>
+
       <!-- Main Explorer Area -->
       <div class="flex-1 flex gap-4 min-h-0">
         <!-- Content List / Grid -->
@@ -216,30 +271,19 @@ function selectItem(id: string) {
             <div v-if="items.length > 0" class="divide-y divide-border/60 overflow-y-auto flex-1 min-h-0">
               <div
                 v-for="item in items"
-                :key="item.id"
+                :key="item.uuid"
                 class="grid grid-cols-12 px-4 py-2 items-center text-sm transition-colors cursor-pointer group"
                 :class="[
-                  selectedItemId === item.id
+                  selectedItemId === item.uuid
                     ? 'bg-primary/10 hover:bg-primary/15'
                     : 'hover:bg-muted/50',
                 ]"
-                @click="selectItem(item.id)"
+                @click="selectItem(item.uuid)"
+                @dblclick="item.type === 'folder' && openFolder(item.uuid)"
               >
                 <!-- Column: Name & Icon -->
                 <div class="col-span-6 sm:col-span-6 flex items-center gap-2.5 min-w-0 pr-2">
-                  <!-- Folder Icon -->
-                  <div v-if="item.type === 'folder'" class="shrink-0">
-                    <Folder class="h-4.5 w-4.5" :class="item.folderColor || 'text-zinc-400'" />
-                  </div>
-                  <!-- Document Icon -->
-                  <div v-else-if="item.type === 'doc'" class="shrink-0 text-blue-500">
-                    <FileText class="h-4.5 w-4.5" />
-                  </div>
-                  <!-- Image Icon -->
-                  <div v-else class="shrink-0 text-rose-500">
-                    <ImageIcon class="h-4.5 w-4.5" />
-                  </div>
-
+                  <DriveItemIcon :item="item" />
                   <span class="truncate font-medium text-foreground text-[13px]">{{ item.name }}</span>
                 </div>
 
@@ -261,13 +305,13 @@ function selectItem(id: string) {
 
                 <!-- Column: Date modified -->
                 <div class="col-span-4 sm:col-span-3 text-xs text-muted-foreground">
-                  {{ item.modifiedDate }}
+                  {{ formatDate(item.updated_at) }}
                 </div>
 
                 <!-- Column: File size & Actions -->
                 <div class="col-span-2 sm:col-span-1 flex items-center justify-end gap-1">
                   <span class="hidden sm:inline-block text-xs text-muted-foreground mr-2 font-mono">
-                    {{ item.size }}
+                    {{ formatSize(item.size) }}
                   </span>
 
                   <!-- Row Actions Dropdown -->
@@ -308,20 +352,28 @@ function selectItem(id: string) {
                   </DropdownMenu>
                 </div>
               </div>
-            </div>
-            <!-- Empty State for List View -->
-            <div v-else class="flex flex-col items-center justify-center flex-1 py-16 text-center">
-              <FolderOpen class="h-12 w-12 text-muted-foreground/30 mb-3" />
-              <h3 class="text-sm font-semibold text-foreground">{{ t('drive.empty_drive_title') }}</h3>
-              <p class="text-xs text-muted-foreground mt-1 max-w-sm">{{ t('drive.empty_drive_subtitle') }}</p>
-            </div>
-          </div>
 
-          <!-- GRID VIEW: Empty State -->
-          <div v-else-if="items.length === 0" class="flex flex-col items-center justify-center flex-1 py-16 text-center">
-            <FolderOpen class="h-12 w-12 text-muted-foreground/30 mb-3" />
-            <h3 class="text-sm font-semibold text-foreground">{{ t('drive.empty_drive_title') }}</h3>
-            <p class="text-xs text-muted-foreground mt-1 max-w-sm">{{ t('drive.empty_drive_subtitle') }}</p>
+              <!-- Infinite scroll sentinel -->
+              <div ref="sentinel" class="h-1" aria-hidden="true"></div>
+
+              <div v-if="loading" class="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 class="h-4 w-4 animate-spin" />
+                {{ t('common.loading') }}
+              </div>
+            </div>
+
+            <div v-else-if="error" class="flex flex-col items-center gap-3 py-6 text-sm">
+              <p class="text-destructive">{{ error }}</p>
+              <Button variant="outline" size="sm" @click="reload">{{ t('common.retry') }}</Button>
+            </div>
+
+            <div
+              v-else-if="!items.length"
+              class="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground"
+            >
+              <FolderOpen class="h-8 w-8" />
+              {{ t('drive.empty_drive_title') }}
+            </div>
           </div>
 
           <!-- GRID VIEW -->
@@ -333,14 +385,15 @@ function selectItem(id: string) {
               </h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 <div
-                  v-for="item in items.filter(i => i.type === 'folder')"
-                  :key="item.id"
+                  v-for="item in folders"
+                  :key="item.uuid"
                   class="flex items-center justify-between p-3 rounded-xl border border-border bg-card hover:bg-accent/40 transition-all cursor-pointer shadow-xs group"
-                  :class="{ 'bg-primary/10 border-primary/50': selectedItemId === item.id }"
-                  @click="selectItem(item.id)"
+                  :class="{ 'bg-primary/10 border-primary/50': selectedItemId === item.uuid }"
+                  @click="selectItem(item.uuid)"
+                  @dblclick="openFolder(item.uuid)"
                 >
                   <div class="flex items-center gap-3 min-w-0">
-                    <Folder class="h-6 w-6 shrink-0" :class="item.folderColor || 'text-zinc-400'" />
+                    <DriveItemIcon :item="item" />
                     <span class="text-sm font-medium text-foreground truncate">{{ item.name }}</span>
                   </div>
                   <Button
@@ -362,22 +415,19 @@ function selectItem(id: string) {
               </h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 <div
-                  v-for="item in items.filter(i => i.type !== 'folder')"
-                  :key="item.id"
+                  v-for="item in files"
+                  :key="item.uuid"
                   class="rounded-xl border border-border bg-card hover:bg-accent/40 transition-all cursor-pointer overflow-hidden shadow-xs group flex flex-col"
-                  :class="{ 'bg-primary/10 border-primary/50': selectedItemId === item.id }"
-                  @click="selectItem(item.id)"
+                  :class="{ 'bg-primary/10 border-primary/50': selectedItemId === item.uuid }"
+                  @click="selectItem(item.uuid)"
                 >
-                  <!-- File Preview Mock -->
                   <div class="h-28 bg-muted/40 flex items-center justify-center border-b border-border/60">
-                    <FileText v-if="item.type === 'doc'" class="h-10 w-10 text-blue-500/80" />
-                    <ImageIcon v-else class="h-10 w-10 text-rose-500/80" />
+                    <DriveItemIcon :item="item" class="h-10 w-10" />
                   </div>
-                  <!-- File Info -->
                   <div class="p-3 flex items-center justify-between gap-2">
                     <div class="min-w-0">
                       <p class="text-xs font-medium text-foreground truncate">{{ item.name }}</p>
-                      <p class="text-[11px] text-muted-foreground">{{ item.size }} • {{ item.modifiedDate }}</p>
+                      <p class="text-[11px] text-muted-foreground">{{ formatSize(item.size) }} • {{ formatDate(item.updated_at) }}</p>
                     </div>
                     <Button
                       variant="ghost"
@@ -390,6 +440,27 @@ function selectItem(id: string) {
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- Infinite scroll sentinel -->
+            <div ref="sentinel" class="h-1" aria-hidden="true"></div>
+
+            <div v-if="loading" class="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 class="h-4 w-4 animate-spin" />
+              {{ t('common.loading') }}
+            </div>
+
+            <div v-else-if="error" class="flex flex-col items-center gap-3 py-6 text-sm">
+              <p class="text-destructive">{{ error }}</p>
+              <Button variant="outline" size="sm" @click="reload">{{ t('common.retry') }}</Button>
+            </div>
+
+            <div
+              v-else-if="!items.length"
+              class="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground"
+            >
+              <FolderOpen class="h-8 w-8" />
+              {{ t('drive.empty_drive_title') }}
             </div>
           </div>
         </div>
@@ -407,15 +478,15 @@ function selectItem(id: string) {
             </Button>
           </div>
 
-          <div v-if="selectedItemId" class="space-y-4 text-sm">
+          <div v-if="selectedItem" class="space-y-4 text-sm">
             <div class="flex items-center gap-3">
-              <Folder class="h-8 w-8 text-primary" />
+              <DriveItemIcon :item="selectedItem" />
               <div>
                 <div class="font-medium text-foreground">
-                  {{ items.find(i => i.id === selectedItemId)?.name }}
+                  {{ selectedItem.name }}
                 </div>
                 <div class="text-xs text-muted-foreground">
-                  {{ items.find(i => i.id === selectedItemId)?.size }}
+                  {{ selectedItem.type === 'folder' ? '—' : formatSize(selectedItem.size) }}
                 </div>
               </div>
             </div>
@@ -427,7 +498,7 @@ function selectItem(id: string) {
               <div class="flex justify-between">
                 <span>{{ t('drive.detail_modified') }}:</span>
                 <span class="text-foreground font-medium">
-                  {{ items.find(i => i.id === selectedItemId)?.modifiedDate }}
+                  {{ formatDate(selectedItem.updated_at) }}
                 </span>
               </div>
               <div class="flex justify-between">
