@@ -92,7 +92,6 @@ function onSelectMyDrive() {
 }
 
 function onSelectCloud(id: string) {
-  activeCloudId.value = id
   isMobileMenuOpen.value = false
   router.push({ name: 'drive', query: { cloud: id } })
 }
