@@ -17,11 +17,25 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { PROVIDERS, providerMeta } from '@/components/cloud/providerMeta'
-import { testCloudAccount, type CloudAccountPayload } from '@/api/cloudAccounts'
+import {
+  testCloudAccount,
+  type CloudAccountPayload,
+  type UpdateCloudAccountPayload,
+} from '@/api/cloudAccounts'
 import { ApiError } from '@/api/client'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 
 const open = defineModel<boolean>('open', { required: true })
+
+/**
+ * When set, the dialog edits that account instead of creating one: the provider
+ * step is skipped (the provider cannot be changed after creation) and Save calls
+ * `update`. An empty secret field keeps the stored one, so a user editing only
+ * the name does not have to re-enter credentials they cannot see.
+ */
+const props = defineProps<{ editUuid?: string | null }>()
+
+const isEdit = computed(() => Boolean(props.editUuid))
 
 const { t } = useI18n()
 const store = useCloudAccountsStore()
@@ -64,11 +78,46 @@ watch(
   { deep: true },
 )
 
-watch(open, (isOpen) => {
-  if (isOpen) reset()
-})
+// `immediate` matters for the edit path: the dialog is normally mounted closed
+// and reset when it opens, but a caller may mount it already open (with an
+// `editUuid`), and the form must still be prefilled in that case.
+watch(
+  open,
+  (isOpen) => {
+    if (isOpen) reset()
+  },
+  { immediate: true },
+)
 
 function reset() {
+  testPassed.value = false
+  testError.value = null
+  fieldErrors.value = {}
+
+  const account = props.editUuid
+    ? store.accounts.find((a) => a.uuid === props.editUuid)
+    : undefined
+
+  if (account) {
+    // Editing: prefill from the account and jump straight to the credential
+    // step. The provider is fixed, so step 1 (choose provider) is skipped.
+    // The secret is never sent back by the API, so its field starts empty and
+    // an empty value means "keep the stored secret".
+    form.value = {
+      provider: account.provider,
+      name: account.name,
+      endpoint: account.credentials?.endpoint ?? '',
+      bucket: account.credentials?.bucket ?? '',
+      region: account.credentials?.region ?? '',
+      access_key_id: account.credentials?.access_key_id ?? '',
+      secret_access_key: '',
+      use_path_style: account.credentials?.use_path_style ?? false,
+      public_url: account.credentials?.public_url ?? '',
+    }
+    step.value = 2
+    return
+  }
+
   step.value = 1
   form.value = {
     provider: 's3',
@@ -81,9 +130,6 @@ function reset() {
     use_path_style: false,
     public_url: '',
   }
-  testPassed.value = false
-  testError.value = null
-  fieldErrors.value = {}
 }
 
 function chooseProvider(value: string) {
@@ -102,6 +148,13 @@ const canTest = computed(
     form.value.bucket.trim() !== '' &&
     form.value.access_key_id.trim() !== '' &&
     form.value.secret_access_key.trim() !== '',
+)
+
+// In edit mode the secret may be left blank (keep the stored one), so Save is
+// gated on the fields the user can actually see rather than on a fresh
+// connection test — the account already exists and was validated at creation.
+const canSaveEdit = computed(
+  () => form.value.name.trim() !== '' && form.value.bucket.trim() !== '',
 )
 
 function payload(): CloudAccountPayload {
@@ -138,8 +191,29 @@ async function save() {
   saving.value = true
   fieldErrors.value = {}
   try {
-    await store.create(payload())
-    toast.success(t('cloud.save_success'))
+    if (isEdit.value && props.editUuid) {
+      // The provider cannot change after creation, and an empty secret means
+      // "keep the stored one" — omit it so the backend does not overwrite the
+      // credentials with a blank value.
+      const p = payload()
+      const update: UpdateCloudAccountPayload = {
+        name: p.name,
+        endpoint: p.endpoint,
+        bucket: p.bucket,
+        region: p.region,
+        access_key_id: p.access_key_id,
+        use_path_style: p.use_path_style,
+        public_url: p.public_url,
+      }
+      if (p.secret_access_key.trim() !== '') {
+        update.secret_access_key = p.secret_access_key
+      }
+      await store.update(props.editUuid, update)
+      toast.success(t('cloud.update_success'))
+    } else {
+      await store.create(payload())
+      toast.success(t('cloud.save_success'))
+    }
     open.value = false
   } catch (e) {
     // A 422 carries one message per invalid field. Attaching them to the
@@ -163,8 +237,10 @@ async function save() {
   <Dialog v-model:open="open">
     <DialogContent class="sm:max-w-lg">
       <DialogHeader>
-        <DialogTitle>{{ t('cloud.add_title') }}</DialogTitle>
-        <DialogDescription>{{ t('cloud.add_subtitle') }}</DialogDescription>
+        <DialogTitle>{{ isEdit ? t('cloud.edit_title') : t('cloud.add_title') }}</DialogTitle>
+        <DialogDescription>
+          {{ isEdit ? t('cloud.edit_subtitle') : t('cloud.add_subtitle') }}
+        </DialogDescription>
       </DialogHeader>
 
       <!-- Step 1: provider -->
@@ -280,12 +356,16 @@ async function save() {
       </div>
 
       <DialogFooter class="gap-2">
-        <Button v-if="step > 1" variant="ghost" @click="step = (step - 1) as Step">
+        <Button v-if="step > 1 && !isEdit" variant="ghost" @click="step = (step - 1) as Step">
           <ArrowLeft class="h-4 w-4" />
           {{ t('cloud.back') }}
         </Button>
-        <Button v-if="step === 2" :disabled="!canTest" @click="step = 3">
+        <Button v-if="step === 2 && !isEdit" :disabled="!canTest" @click="step = 3">
           {{ t('cloud.next') }}
+        </Button>
+        <Button v-if="step === 2 && isEdit" :disabled="!canSaveEdit || saving" @click="save">
+          <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
+          {{ t('cloud.save') }}
         </Button>
         <Button v-if="step === 3" :disabled="!testPassed || saving" @click="save">
           <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />

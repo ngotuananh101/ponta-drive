@@ -4,13 +4,17 @@ import { useRouter, useRoute } from 'vue-router'
 import { driveLocation } from '@/router/drivePaths'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
+import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
+import type { CloudAccount } from '@/api/cloudAccounts'
+import { humanizeBytes } from '@/lib/format'
+import { useCloudSync } from '@/composables/useCloudSync'
 import { AppLogo } from '@/components/icons'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import AddCloudDialog from '@/components/cloud/AddCloudDialog.vue'
-import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
+import DeleteCloudDialog from '@/components/cloud/DeleteCloudDialog.vue'
 import { providerMeta } from '@/components/cloud/providerMeta'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,6 +43,10 @@ import {
   X,
   LogOut,
   User as UserIcon,
+  MoreVertical,
+  RefreshCw,
+  Pencil,
+  Trash2,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -48,8 +56,64 @@ const route = useRoute()
 
 const cloudStore = useCloudAccountsStore()
 const { accounts: cloudAccounts, loading: cloudLoading, error: cloudError } = storeToRefs(cloudStore)
+const { sync } = useCloudSync()
+
+const activeCloudUuid = computed(() => (route.params.cloudUuid as string) || '')
 
 const isAddCloudOpen = ref(false)
+/** uuid being edited; drives the AddCloudDialog's edit mode. */
+const editCloudUuid = ref<string | null>(null)
+/** uuid pending deletion; also drives the delete confirmation's open state. */
+const deleteCloudUuid = ref<string | null>(null)
+const deleteCloudName = ref('')
+
+const isDeleteCloudOpen = computed({
+  get: () => deleteCloudUuid.value !== null,
+  set: (open: boolean) => {
+    if (!open) deleteCloudUuid.value = null
+  },
+})
+
+function handleEditCloud(cloud: CloudAccount) {
+  editCloudUuid.value = cloud.uuid
+  isAddCloudOpen.value = true
+}
+
+function handleDeleteCloud(cloud: CloudAccount) {
+  deleteCloudName.value = cloud.name
+  deleteCloudUuid.value = cloud.uuid
+}
+
+async function handleSetDefault(uuid: string) {
+  try {
+    await cloudStore.setDefault(uuid)
+    toast.success(t('cloud.set_default_success'))
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : String(e))
+  }
+}
+
+// Opening the dialog for a create must not inherit the uuid left over from a
+// previous edit, or the create form would open prefilled and call `update`.
+function handleAddCloud() {
+  editCloudUuid.value = null
+  isAddCloudOpen.value = true
+}
+
+// The account whose drive is currently open, if any. Its storage figures feed
+// the sidebar widget; `null` (e.g. an unknown uuid) falls back to zeros.
+const activeCloud = computed(
+  () => cloudAccounts.value.find((a) => a.uuid === activeCloudUuid.value) ?? null,
+)
+
+// Percentage used, clamped to [0, 100] so a backend that reports `used` above
+// `total` (or a zero total) cannot produce a bar that overflows or NaN.
+const storagePercent = computed(() => {
+  const total = activeCloud.value?.total_storage ?? 0
+  const used = activeCloud.value?.used_storage ?? 0
+  if (total <= 0) return 0
+  return Math.min(100, Math.max(0, Math.round((used / total) * 100)))
+})
 
 onMounted(() => {
   if (cloudAccounts.value.length === 0) {
@@ -60,7 +124,6 @@ onMounted(() => {
 const isMobileMenuOpen = ref(false)
 const searchQuery = ref('')
 const isMyDriveOpen = ref(true)
-const activeCloudUuid = computed(() => (route.params.cloudUuid as string) || '')
 
 const activeNav = computed(() => {
   if (route.name === 'home') return 'home'
@@ -110,10 +173,6 @@ function onSelectCloud(uuid: string) {
     return
   }
   router.push(driveLocation(uuid))
-}
-
-function handleAddCloud() {
-  isAddCloudOpen.value = true
 }
 
 async function handleLogout() {
@@ -258,11 +317,12 @@ async function handleLogout() {
                    evaluated before the loop. A `<template>` wrapper keeps the
                    buttons as direct children, so the layout is unchanged. -->
               <template v-else>
-                <!-- A row is a container, not a button: the sync control is a
-                     second interactive element, and a button cannot be nested
-                     inside another button. The account button keeps the select
-                     action; sync sits beside it and appears on hover (or while
-                     it is running, so the spinner stays visible). -->
+                <!-- A row is a container, not a button: the row holds the
+                     account button plus an actions menu, and a button cannot
+                     be nested inside another button. The account button keeps
+                     the select action; the kebab menu (sync / edit / default /
+                     delete) sits beside it and appears on hover, or stays
+                     visible while a sync is running so the spinner is seen. -->
                 <div
                   v-for="cloud in cloudAccounts"
                   :key="cloud.uuid"
@@ -297,7 +357,61 @@ async function handleLogout() {
                     </span>
                   </button>
 
-                  <SyncCloudButton :account-uuid="cloud.uuid" />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <button
+                        type="button"
+                        class="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all cursor-pointer shrink-0"
+                        :class="
+                          cloudStore.isSyncing(cloud.uuid)
+                            ? 'opacity-100'
+                            : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+                        "
+                        :title="t('cloud.menu_actions')"
+                        @click.stop
+                      >
+                        <RefreshCw
+                          v-if="cloudStore.isSyncing(cloud.uuid)"
+                          class="h-3.5 w-3.5 animate-spin"
+                        />
+                        <MoreVertical v-else class="h-3.5 w-3.5" />
+                        <span class="sr-only">{{ t('cloud.menu_actions') }}</span>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-48 p-1.5 shadow-xl border-border">
+                      <DropdownMenuItem
+                        class="cursor-pointer py-2 px-3 gap-2.5 rounded-lg text-sm"
+                        :disabled="cloudStore.isSyncing(cloud.uuid)"
+                        @click="sync(cloud.uuid)"
+                      >
+                        <RefreshCw class="h-4 w-4" />
+                        <span>{{ t('cloud.sync') }}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        class="cursor-pointer py-2 px-3 gap-2.5 rounded-lg text-sm"
+                        @click="handleEditCloud(cloud)"
+                      >
+                        <Pencil class="h-4 w-4" />
+                        <span>{{ t('cloud.menu_edit') }}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        class="cursor-pointer py-2 px-3 gap-2.5 rounded-lg text-sm"
+                        :disabled="cloud.is_default"
+                        @click="handleSetDefault(cloud.uuid)"
+                      >
+                        <Star class="h-4 w-4" />
+                        <span>{{ t('cloud.menu_set_default') }}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        class="cursor-pointer py-2 px-3 gap-2.5 rounded-lg text-sm text-destructive focus:text-destructive"
+                        @click="handleDeleteCloud(cloud)"
+                      >
+                        <Trash2 class="h-4 w-4" />
+                        <span>{{ t('cloud.menu_delete') }}</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </template>
 
@@ -326,13 +440,23 @@ async function handleLogout() {
           <span>{{ t('drive.nav_storage') }}</span>
         </div>
 
-        <!-- Progress Bar -->
+        <!-- Progress Bar. Width and figures come from the account whose drive
+             is open; with no match (unknown uuid, list not loaded) they read
+             as zero rather than a hardcoded placeholder. -->
         <div class="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-2">
-          <div class="h-full bg-primary rounded-full transition-all" style="width: 25%" />
+          <div
+            class="h-full bg-primary rounded-full transition-all"
+            :style="{ width: `${storagePercent}%` }"
+          />
         </div>
 
         <p class="text-[11px] text-muted-foreground leading-relaxed">
-          {{ t('drive.storage_used', { used: '733.43 GB', total: '5 TB' }) }}
+          {{
+            t('drive.storage_used', {
+              used: humanizeBytes(activeCloud?.used_storage ?? 0),
+              total: humanizeBytes(activeCloud?.total_storage ?? 0),
+            })
+          }}
         </p>
       </div>
     </aside>
@@ -458,5 +582,10 @@ async function handleLogout() {
     </div>
   </div>
 
-  <AddCloudDialog v-model:open="isAddCloudOpen" />
+  <AddCloudDialog v-model:open="isAddCloudOpen" :edit-uuid="editCloudUuid" />
+  <DeleteCloudDialog
+    v-model:open="isDeleteCloudOpen"
+    :account-uuid="deleteCloudUuid"
+    :account-name="deleteCloudName"
+  />
 </template>

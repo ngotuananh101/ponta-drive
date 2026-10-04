@@ -15,6 +15,8 @@
   "cloud": {
     "add_title": "Connect new storage",
     "add_subtitle": "Pick a provider and enter the connection details.",
+    "edit_title": "Edit storage",
+    "edit_subtitle": "Update the connection details. Leave Secret Access Key blank to keep it.",
     "provider_s3_desc": "Amazon S3, or any S3-compatible service.",
     "provider_r2_desc": "Cloudflare R2 with a per-account endpoint.",
     "provider_minio_desc": "Self-hosted MinIO, usually with a path-style endpoint.",
@@ -33,6 +35,7 @@
     "test_passed": "Connection succeeded.",
     "save": "Save",
     "save_success": "Storage account added.",
+    "update_success": "Storage account updated.",
     "back": "Back",
     "next": "Next",
     "badge_default": "Default",
@@ -41,7 +44,17 @@
     "sync": "Sync",
     "syncing": "Syncing...",
     "sync_started": "Sync started.",
-    "sync_failed": "Sync failed. Please try again."
+    "sync_failed": "Sync failed. Please try again.",
+    "menu_actions": "Actions",
+    "menu_edit": "Edit",
+    "menu_set_default": "Set as default",
+    "menu_delete": "Delete storage",
+    "set_default_success": "Set as the default account.",
+    "delete_title": "Delete storage account?",
+    "delete_confirm": "Account \"{name}\" will be removed from Drive. This cannot be undone.",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "delete_success": "Storage account deleted."
   },
   "theme": {
     "toggle_theme": "Toggle theme",

@@ -9,11 +9,11 @@
  * because only the view knows what that is (a summary, a file listing).
  */
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 import { RefreshCw } from 'lucide-vue-next'
 
 import { Button } from '@/components/ui/button'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
+import { useCloudSync } from '@/composables/useCloudSync'
 
 const props = defineProps<{
   accountUuid: string
@@ -29,15 +29,11 @@ const emit = defineEmits<{ synced: [] }>()
 
 const { t } = useI18n()
 const store = useCloudAccountsStore()
+const { sync } = useCloudSync()
 
 async function onClick() {
-  try {
-    await store.sync(props.accountUuid)
-    toast.success(t('cloud.sync_started'))
-    emit('synced')
-  } catch {
-    toast.error(t('cloud.sync_failed'))
-  }
+  await sync(props.accountUuid)
+  emit('synced')
 }
 </script>
 
