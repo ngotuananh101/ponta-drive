@@ -436,7 +436,7 @@ function formatSize(bytes: number): string {
                   @click="selectItem(item.uuid)"
                 >
                   <div class="h-28 bg-muted/40 flex items-center justify-center border-b border-border/60">
-                    <DriveItemIcon :item="item" class="h-10 w-10" />
+                    <DriveItemIcon :item="item" size-class="h-10 w-10" />
                   </div>
                   <div class="p-3 flex items-center justify-between gap-2">
                     <div class="min-w-0">

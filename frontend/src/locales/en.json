@@ -102,6 +102,7 @@
     "status_error": "Sync failed",
     "suggested_title": "Suggested for you",
     "suggested_subtitle": "Files you recently accessed or uploaded",
+    "preview_coming_soon": "File preview is under development.",
     "recent_activity_title": "Recent activity",
     "recent_activity_subtitle": "History of uploads, edits, and synchronizations",
     "quick_upload": "Upload file",

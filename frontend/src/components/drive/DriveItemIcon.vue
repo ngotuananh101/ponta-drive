@@ -4,7 +4,12 @@ import { FileText, ImageIcon, FileArchive, FileVideo, FileAudio, Folder, File } 
 
 import type { DriveItem } from '@/api/driveItems'
 
-const props = defineProps<{ item: DriveItem }>()
+// `sizeClass` exists so a caller can render the same type-aware icon at a larger
+// size (the home "Suggested for you" previews) without fighting the default via
+// a class merge, whose winner depends on stylesheet order rather than intent.
+const props = withDefaults(defineProps<{ item: DriveItem; sizeClass?: string }>(), {
+  sizeClass: 'h-4.5 w-4.5',
+})
 
 // The API only knows "file" and "folder", so the icon comes from the MIME type
 // and the extension rather than from `type`.
@@ -30,5 +35,5 @@ const colorClass = computed(() =>
 </script>
 
 <template>
-  <component :is="icon" class="h-4.5 w-4.5 shrink-0" :class="colorClass" />
+  <component :is="icon" class="shrink-0" :class="[sizeClass, colorClass]" />
 </template>
