@@ -97,6 +97,10 @@ watch(
   { immediate: true },
 )
 
+// The header label mirrors the tab title but never renders blank: until the
+// name loads (or when the account is unknown) it falls back to "My Drive".
+const pageTitle = computed(() => driveTitle.value || t('drive.nav_my_drive'))
+
 const { items, loading, error, hasMore, loadMore, reload } = useDriveItems(() => ({
   cloudAccountUuid: cloudAccountUuid.value,
   parentUuid: parentUuid.value,
@@ -193,7 +197,7 @@ function formatSize(bytes: number): string {
               type="button"
               class="flex items-center gap-2 text-2xl font-bold text-foreground hover:bg-accent/60 px-3 py-1.5 -ml-3 rounded-xl transition-colors cursor-pointer"
             >
-              <span>{{ t('drive.nav_my_drive') }}</span>
+              <span>{{ pageTitle }}</span>
               <ChevronDown class="h-5 w-5 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
