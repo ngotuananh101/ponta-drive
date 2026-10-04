@@ -101,16 +101,20 @@ beforeEach(() => {
 
 describe('DriveView document title', () => {
   it('uses the drive name at the root', async () => {
-    await mountDrive('/c/acc-1', [])
+    const { wrapper } = await mountDrive('/c/acc-1', [])
     await vi.waitFor(() => expect(document.title).toContain('My S3'))
     expect(document.title).toBe('My S3 - Ponta Drive')
+    // The in-page header shows the same name.
+    expect(wrapper.text()).toContain('My S3')
+    expect(wrapper.text()).not.toContain(viLocale.drive.nav_my_drive)
   })
 
   it('uses the current folder name inside a folder', async () => {
-    await mountDrive('/c/acc-1/f/folder-9', [
+    const { wrapper } = await mountDrive('/c/acc-1/f/folder-9', [
       driveItem({ uuid: 'folder-9', name: 'Photos' }),
     ])
     await vi.waitFor(() => expect(document.title).toContain('Photos'))
     expect(document.title).toBe('Photos - Ponta Drive')
+    expect(wrapper.text()).toContain('Photos')
   })
 })
