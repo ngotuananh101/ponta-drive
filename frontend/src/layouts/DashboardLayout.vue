@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { driveLocation } from '@/router/drivePaths'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
@@ -59,15 +60,15 @@ onMounted(() => {
 const isMobileMenuOpen = ref(false)
 const searchQuery = ref('')
 const isMyDriveOpen = ref(true)
-const activeCloudId = computed(() => (route.query.cloud as string) || '')
+const activeCloudUuid = computed(() => (route.params.cloudUuid as string) || '')
 
 const activeNav = computed(() => {
   if (route.name === 'home') return 'home'
-  if (route.name === 'drive') return 'my_drive'
+  if (route.name === 'drive' || route.name === 'drive-folder') return 'my_drive'
   return (route.name as string) || 'home'
 })
 
-const isDriveView = computed(() => route.name === 'drive')
+const isDriveView = computed(() => route.name === 'drive' || route.name === 'drive-folder')
 
 const navItems = [
   { id: 'home', labelKey: 'drive.nav_home', icon: Home },
@@ -89,12 +90,17 @@ function onNavClick(itemId: string) {
 function onSelectMyDrive() {
   isMyDriveOpen.value = true
   isMobileMenuOpen.value = false
-  router.push({ name: 'drive' })
+  const first = cloudAccounts.value[0]
+  if (first) {
+    router.push(driveLocation(first.uuid))
+  } else {
+    router.push({ name: 'home' })
+  }
 }
 
-function onSelectCloud(id: string) {
+function onSelectCloud(uuid: string) {
   isMobileMenuOpen.value = false
-  router.push({ name: 'drive', query: { cloud: id } })
+  router.push(driveLocation(uuid))
 }
 
 function handleAddCloud() {
@@ -250,10 +256,10 @@ async function handleLogout() {
                      it is running, so the spinner stays visible). -->
                 <div
                   v-for="cloud in cloudAccounts"
-                  :key="cloud.id"
+                  :key="cloud.uuid"
                   class="group w-full flex items-center gap-1 rounded-lg pr-1 transition-colors"
                   :class="[
-                    activeCloudId === String(cloud.id) && activeNav === 'my_drive'
+                    activeCloudUuid === cloud.uuid && activeNav === 'my_drive'
                       ? 'bg-primary/10 shadow-2xs'
                       : 'hover:bg-accent/50',
                   ]"
@@ -262,11 +268,11 @@ async function handleLogout() {
                     type="button"
                     class="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                     :class="[
-                      activeCloudId === String(cloud.id) && activeNav === 'my_drive'
+                      activeCloudUuid === cloud.uuid && activeNav === 'my_drive'
                         ? 'text-primary font-semibold'
                         : 'text-muted-foreground group-hover:text-foreground',
                     ]"
-                    @click="onSelectCloud(String(cloud.id))"
+                    @click="onSelectCloud(cloud.uuid)"
                   >
                     <component
                       :is="providerMeta(cloud.provider).icon"
@@ -282,7 +288,7 @@ async function handleLogout() {
                     </span>
                   </button>
 
-                  <SyncCloudButton :account-id="cloud.id" />
+                  <SyncCloudButton :account-uuid="cloud.uuid" />
                 </div>
               </template>
 

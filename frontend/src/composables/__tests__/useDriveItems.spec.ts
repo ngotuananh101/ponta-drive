@@ -8,14 +8,13 @@ import type { DriveItem } from '@/api/driveItems'
 
 function item(uuid: string, name = uuid): DriveItem {
   return {
-    id: 1,
     uuid,
     name,
     type: 'file',
     mime_type: 'text/plain',
     size: 1,
     extension: 'txt',
-    cloud_account_id: 1,
+    cloud_account_uuid: 'acc-uuid',
     is_starred: false,
     status: 'ready',
     updated_at: '2026-10-01 00:00:00',
@@ -40,7 +39,7 @@ describe('useDriveItems composable', () => {
     let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountId: 1 }))
+      result = useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid' }))
     })
 
     // Initial fetch is synchronous (no debounce on mount).
@@ -62,10 +61,9 @@ describe('useDriveItems composable', () => {
     })
 
     const search = ref('')
-    let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountId: 1, search: search.value }), 250)
+      useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid', search: search.value }), 250)
     })
 
     // Flush the initial fetch microtask.
@@ -94,29 +92,27 @@ describe('useDriveItems composable', () => {
       .spyOn(api, 'listDriveItems')
       .mockResolvedValue({ status: 'ok', data: [], meta: { has_more: false, next_cursor: '' } })
 
-    const cloudAccountId = ref(1)
-    let result: ReturnType<typeof useDriveItems>
+    const cloudAccountUuid = ref('acc-uuid')
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountId: cloudAccountId.value }), 0)
+      useDriveItems(() => ({ cloudAccountUuid: cloudAccountUuid.value }), 0)
     })
 
     await vi.advanceTimersByTimeAsync(0)
     expect(spy).toHaveBeenCalledTimes(1)
 
-    cloudAccountId.value = 2
+    cloudAccountUuid.value = 'other-uuid'
     await vi.advanceTimersByTimeAsync(0)
 
     expect(spy).toHaveBeenCalledTimes(2)
-    expect(spy.mock.calls[1][0].cloudAccountId).toBe(2)
+    expect(spy.mock.calls[1][0].cloudAccountUuid).toBe('other-uuid')
 
     vi.useRealTimers()
     scope.stop()
   })
 
   it('loadMore delegates to the store next page', async () => {
-    const spy = vi
-      .spyOn(api, 'listDriveItems')
+    vi.spyOn(api, 'listDriveItems')
       .mockResolvedValueOnce({
         status: 'ok',
         data: [item('a')],
@@ -131,7 +127,7 @@ describe('useDriveItems composable', () => {
     let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
+      result = useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid' }), 0)
     })
 
     await nextTick()
@@ -165,7 +161,7 @@ describe('useDriveItems composable', () => {
     let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
+      result = useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid' }), 0)
     })
 
     await nextTick()
@@ -190,7 +186,7 @@ describe('useDriveItems composable', () => {
     let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
+      result = useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid' }), 0)
     })
 
     await nextTick()
