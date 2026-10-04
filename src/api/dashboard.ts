@@ -11,6 +11,7 @@ export interface Activity {
   target_name: string
   target_uuid: string | null
   cloud_id: number | null
+  cloud_account_uuid: string | null
   ip_address: string
   user_agent: string
   /** Action-specific payload (e.g. `{ items_count: 12 }`), null when absent. */
