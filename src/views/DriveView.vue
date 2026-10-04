@@ -13,6 +13,7 @@ import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
 import { useDriveItems } from '@/composables/useDriveItems'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { driveLocation } from '@/router/drivePaths'
+import { setDocumentTitle } from '@/lib/documentTitle'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,6 +71,28 @@ watch(
   () => props.folderUuid,
   (uuid) => {
     void driveStore.loadBreadcrumb(uuid ?? '')
+  },
+  { immediate: true },
+)
+
+// The tab title names what the user is looking at: the folder's own name when
+// inside a folder, otherwise the drive's. Both names arrive asynchronously (the
+// breadcrumb and the account list), so the title is kept reactive rather than
+// set once on mount.
+const driveTitle = computed(() => {
+  if (parentUuid.value) {
+    const current = breadcrumb.value[breadcrumb.value.length - 1]
+    return current?.name ?? ''
+  }
+  return cloudStore.accounts.find((a) => a.uuid === cloudAccountUuid.value)?.name ?? ''
+})
+
+watch(
+  driveTitle,
+  (title) => {
+    // While the name is still loading, leave the router's generic title in
+    // place rather than flashing the bare brand.
+    if (title) setDocumentTitle(title)
   },
   { immediate: true },
 )

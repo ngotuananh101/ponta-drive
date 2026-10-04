@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { i18n } from '@/i18n'
+import { setDocumentTitle } from '@/lib/documentTitle'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -55,12 +56,10 @@ const router = createRouter({
 })
 
 export function updateDocumentTitle(titleKey?: string) {
-  const brand = 'Ponta Drive'
   if (titleKey && i18n.global.te(titleKey)) {
-    const title = i18n.global.t(titleKey)
-    document.title = `${title} - ${brand}`
+    setDocumentTitle(i18n.global.t(titleKey))
   } else {
-    document.title = brand
+    setDocumentTitle()
   }
 }
 
