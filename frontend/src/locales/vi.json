@@ -15,6 +15,8 @@
   "cloud": {
     "add_title": "Kết nối lưu trữ mới",
     "add_subtitle": "Chọn nhà cung cấp và nhập thông tin kết nối.",
+    "edit_title": "Chỉnh sửa lưu trữ",
+    "edit_subtitle": "Cập nhật thông tin kết nối. Để trống Secret Access Key nếu không đổi.",
     "provider_s3_desc": "Amazon S3 chuẩn, hoặc dịch vụ tương thích S3.",
     "provider_r2_desc": "Cloudflare R2 với endpoint riêng theo tài khoản.",
     "provider_minio_desc": "MinIO tự vận hành, thường dùng đường dẫn kiểu path-style.",
@@ -33,6 +35,7 @@
     "test_passed": "Kết nối thành công.",
     "save": "Lưu",
     "save_success": "Đã thêm tài khoản lưu trữ.",
+    "update_success": "Đã cập nhật tài khoản lưu trữ.",
     "back": "Quay lại",
     "next": "Tiếp tục",
     "badge_default": "Mặc định",
@@ -41,7 +44,17 @@
     "sync": "Đồng bộ",
     "syncing": "Đang đồng bộ...",
     "sync_started": "Đã bắt đầu đồng bộ dữ liệu.",
-    "sync_failed": "Đồng bộ thất bại. Vui lòng thử lại."
+    "sync_failed": "Đồng bộ thất bại. Vui lòng thử lại.",
+    "menu_actions": "Thao tác",
+    "menu_edit": "Chỉnh sửa",
+    "menu_set_default": "Đặt làm mặc định",
+    "menu_delete": "Xóa lưu trữ",
+    "set_default_success": "Đã đặt làm tài khoản mặc định.",
+    "delete_title": "Xóa tài khoản lưu trữ?",
+    "delete_confirm": "Tài khoản \"{name}\" sẽ bị gỡ khỏi Drive. Hành động này không thể hoàn tác.",
+    "delete": "Xóa",
+    "cancel": "Hủy",
+    "delete_success": "Đã xóa tài khoản lưu trữ."
   },
   "theme": {
     "toggle_theme": "Chuyển đổi giao diện",

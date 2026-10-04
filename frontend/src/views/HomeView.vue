@@ -10,6 +10,7 @@ import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import AddCloudDialog from '@/components/cloud/AddCloudDialog.vue'
 import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
 import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
+import { humanizeBytes } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import {
   Cloud,
@@ -107,17 +108,6 @@ onMounted(async () => {
  */
 async function handleSynced() {
   await loadDashboard()
-}
-
-/** Formats a byte count into a compact human-readable string (binary units). */
-function humanizeBytes(bytes: number): string {
-  if (!bytes || bytes <= 0) return '0 B'
-  const GB = 1073741824
-  const MB = 1048576
-  if (bytes >= GB) return `${(bytes / GB).toFixed(1)} GB`
-  if (bytes >= MB) return `${(bytes / MB).toFixed(0)} MB`
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${bytes} B`
 }
 
 /** Formats an ISO timestamp for display, falling back to the raw value. */
