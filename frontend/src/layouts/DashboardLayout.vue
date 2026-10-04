@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
+import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 import { AppLogo } from '@/components/icons'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import LanguageToggle from '@/components/LanguageToggle.vue'
+import AddCloudDialog from '@/components/cloud/AddCloudDialog.vue'
+import { providerMeta } from '@/components/cloud/providerMeta'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -26,8 +29,6 @@ import {
   Clock,
   Star,
   Cloud,
-  Database,
-  Server,
   ChevronDown,
   FolderPlus,
   Upload,
@@ -43,6 +44,17 @@ const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
+const cloudStore = useCloudAccountsStore()
+const { accounts: cloudAccounts, loading: cloudLoading, error: cloudError } = storeToRefs(cloudStore)
+
+const isAddCloudOpen = ref(false)
+
+onMounted(() => {
+  if (cloudAccounts.value.length === 0) {
+    void cloudStore.fetch()
+  }
+})
+
 const isMobileMenuOpen = ref(false)
 const searchQuery = ref('')
 const isMyDriveOpen = ref(true)
@@ -55,21 +67,6 @@ const activeNav = computed(() => {
 })
 
 const isDriveView = computed(() => route.name === 'drive')
-
-interface CloudAccount {
-  id: string
-  name: string
-  icon: any
-  color: string
-  badge?: string
-}
-
-const cloudAccounts = ref<CloudAccount[]>([
-  { id: 'google_drive', name: 'Google Drive', icon: Cloud, color: 'text-amber-500' },
-  { id: 'onedrive', name: 'OneDrive', icon: Cloud, color: 'text-blue-500' },
-  { id: 'cloudflare_r2', name: 'Cloudflare R2', icon: Database, color: 'text-orange-500' },
-  { id: 'ponta_storage', name: 'Ponta Storage', icon: Server, color: 'text-emerald-500', badge: 'Default' },
-])
 
 const navItems = [
   { id: 'home', labelKey: 'drive.nav_home', icon: Home },
@@ -101,7 +98,7 @@ function onSelectCloud(id: string) {
 }
 
 function handleAddCloud() {
-  toast.info(t('drive.add_cloud_desc'))
+  isAddCloudOpen.value = true
 }
 
 async function handleLogout() {
@@ -226,41 +223,66 @@ async function handleLogout() {
               v-show="isMyDriveOpen"
               class="pl-4 pr-1 py-1 space-y-0.5 relative ml-3 before:absolute before:left-1 before:top-1 before:bottom-1 before:w-px before:bg-border/70"
             >
-              <button
-                v-for="cloud in cloudAccounts"
-                :key="cloud.id"
-                type="button"
-                class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                :class="[
-                  activeCloudId === cloud.id && activeNav === 'my_drive'
-                    ? 'bg-primary/10 text-primary font-semibold shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-                ]"
-                @click="onSelectCloud(cloud.id)"
-              >
-                <div class="flex items-center gap-2 min-w-0">
-                  <component :is="cloud.icon" class="h-3.5 w-3.5 shrink-0" :class="cloud.color" />
-                  <span class="truncate">{{ cloud.name }}</span>
-                </div>
-                <span
-                  v-if="cloud.badge"
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider shrink-0"
+              <!-- The list has three states and they must be told apart: a
+                   failed request that renders as an empty list looks like the
+                   user has no accounts, not like something went wrong. -->
+              <div v-if="cloudLoading" class="px-2.5 py-1.5 text-xs text-muted-foreground">
+                {{ t('common.loading') }}
+              </div>
+              <div v-else-if="cloudError" class="px-2.5 py-1.5 grid gap-1.5">
+                <p class="text-xs text-destructive">{{ t('cloud.load_failed') }}</p>
+                <Button variant="outline" size="sm" class="h-7 text-xs" @click="cloudStore.fetch()">
+                  {{ t('common.retry') }}
+                </Button>
+              </div>
+              <p v-else-if="cloudAccounts.length === 0" class="px-2.5 py-1.5 text-xs text-muted-foreground">
+                {{ t('cloud.empty') }}
+              </p>
+              <!-- `v-for` and `v-else` cannot sit on the same element: Vue 3
+                   gives `v-if` the higher priority, so the chain would be
+                   evaluated before the loop. A `<template>` wrapper keeps the
+                   buttons as direct children, so the layout is unchanged. -->
+              <template v-else>
+                <button
+                  v-for="cloud in cloudAccounts"
+                  :key="cloud.id"
+                  type="button"
+                  class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                  :class="[
+                    activeCloudId === String(cloud.id) && activeNav === 'my_drive'
+                      ? 'bg-primary/10 text-primary font-semibold shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                  ]"
+                  @click="onSelectCloud(String(cloud.id))"
                 >
-                  {{ cloud.badge }}
-                </span>
-              </button>
+                  <div class="flex items-center gap-2 min-w-0">
+                    <component
+                      :is="providerMeta(cloud.provider).icon"
+                      class="h-3.5 w-3.5 shrink-0"
+                      :class="providerMeta(cloud.provider).color"
+                    />
+                    <span class="truncate">{{ cloud.name }}</span>
+                  </div>
+                  <span
+                    v-if="cloud.is_default"
+                    class="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider shrink-0"
+                  >
+                    {{ t('cloud.badge_default') }}
+                  </span>
+                </button>
 
-              <!-- "+ Thêm Cloud" Action Button -->
-              <button
-                type="button"
-                class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors group cursor-pointer"
-                @click="handleAddCloud"
-              >
-                <div class="flex h-4 w-4 items-center justify-center rounded border border-dashed border-border group-hover:border-primary/70 shrink-0">
-                  <Plus class="h-2.5 w-2.5 text-muted-foreground group-hover:text-primary" />
-                </div>
-                <span class="truncate font-normal">{{ t('drive.add_cloud') }}</span>
-              </button>
+                <!-- "+ Thêm Cloud" Action Button -->
+                <button
+                  type="button"
+                  class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors group cursor-pointer"
+                  @click="handleAddCloud"
+                >
+                  <div class="flex h-4 w-4 items-center justify-center rounded border border-dashed border-border group-hover:border-primary/70 shrink-0">
+                    <Plus class="h-2.5 w-2.5 text-muted-foreground group-hover:text-primary" />
+                  </div>
+                  <span class="truncate font-normal">{{ t('drive.add_cloud') }}</span>
+                </button>
+              </template>
             </div>
           </div>
         </template>
@@ -404,4 +426,6 @@ async function handleLogout() {
       </main>
     </div>
   </div>
+
+  <AddCloudDialog v-model:open="isAddCloudOpen" />
 </template>
