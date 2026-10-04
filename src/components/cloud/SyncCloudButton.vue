@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 
 const props = defineProps<{
-  accountId: number
+  accountUuid: string
   /**
    * `labeled` renders a bordered button with visible text, for a toolbar.
    * The default is an icon-only button that fades in on hover of the nearest
@@ -32,7 +32,7 @@ const store = useCloudAccountsStore()
 
 async function onClick() {
   try {
-    await store.sync(props.accountId)
+    await store.sync(props.accountUuid)
     toast.success(t('cloud.sync_started'))
     emit('synced')
   } catch {
@@ -47,12 +47,12 @@ async function onClick() {
     variant="outline"
     size="sm"
     class="h-8 rounded-lg border border-border bg-card shadow-xs gap-1.5 text-xs font-medium cursor-pointer"
-    :disabled="store.isSyncing(accountId)"
-    :title="store.isSyncing(accountId) ? t('cloud.syncing') : t('cloud.sync')"
+    :disabled="store.isSyncing(accountUuid)"
+    :title="store.isSyncing(accountUuid) ? t('cloud.syncing') : t('cloud.sync')"
     @click="onClick"
   >
-    <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': store.isSyncing(accountId) }" />
-    <span>{{ store.isSyncing(accountId) ? t('cloud.syncing') : t('cloud.sync') }}</span>
+    <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': store.isSyncing(accountUuid) }" />
+    <span>{{ store.isSyncing(accountUuid) ? t('cloud.syncing') : t('cloud.sync') }}</span>
   </Button>
 
   <button
@@ -60,14 +60,14 @@ async function onClick() {
     type="button"
     class="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all cursor-pointer shrink-0 disabled:cursor-default"
     :class="{
-      'opacity-100': store.isSyncing(accountId),
-      'opacity-0 group-hover:opacity-100 focus-visible:opacity-100': !store.isSyncing(accountId),
+      'opacity-100': store.isSyncing(accountUuid),
+      'opacity-0 group-hover:opacity-100 focus-visible:opacity-100': !store.isSyncing(accountUuid),
     }"
-    :disabled="store.isSyncing(accountId)"
-    :title="store.isSyncing(accountId) ? t('cloud.syncing') : t('cloud.sync')"
+    :disabled="store.isSyncing(accountUuid)"
+    :title="store.isSyncing(accountUuid) ? t('cloud.syncing') : t('cloud.sync')"
     @click.stop="onClick"
   >
-    <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': store.isSyncing(accountId) }" />
+    <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': store.isSyncing(accountUuid) }" />
     <span class="sr-only">{{ t('cloud.sync') }}</span>
   </button>
 </template>
