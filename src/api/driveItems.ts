@@ -83,3 +83,64 @@ export async function getDriveItemBreadcrumb(
     { signal },
   )
 }
+
+export interface CreateFolderPayload {
+  cloudAccountUuid: string
+  parentUuid?: string | null
+  name: string
+}
+
+export async function createDriveFolder(
+  payload: CreateFolderPayload,
+): Promise<ApiResponse<DriveItem>> {
+  const body: Record<string, string> = {
+    cloud_account_uuid: payload.cloudAccountUuid,
+  }
+  if (payload.parentUuid) {
+    body.parent_uuid = payload.parentUuid
+  }
+  body.name = payload.name.trim()
+  return fetchApi<ApiResponse<DriveItem>>('/v1/drive/items/folders', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function renameDriveItem(
+  uuid: string,
+  name: string,
+): Promise<ApiResponse<DriveItem>> {
+  return fetchApi<ApiResponse<DriveItem>>(`/v1/drive/items/${encodeURIComponent(uuid)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name: name.trim() }),
+  })
+}
+
+export async function deleteDriveItem(
+  uuid: string,
+  permanent = true,
+): Promise<ApiResponse> {
+  const query = permanent ? '?permanent=true' : ''
+  return fetchApi<ApiResponse>(`/v1/drive/items/${encodeURIComponent(uuid)}${query}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function toggleStarDriveItem(uuid: string): Promise<ApiResponse<DriveItem>> {
+  return fetchApi<ApiResponse<DriveItem>>(`/v1/drive/items/${encodeURIComponent(uuid)}/star`, {
+    method: 'POST',
+  })
+}
+
+export interface DownloadUrlResponse {
+  download_url: string
+  item: DriveItem
+}
+
+export async function getDriveItemDownloadUrl(
+  uuid: string,
+): Promise<ApiResponse<DownloadUrlResponse>> {
+  return fetchApi<ApiResponse<DownloadUrlResponse>>(
+    `/v1/drive/items/${encodeURIComponent(uuid)}/download?mode=json`,
+  )
+}
