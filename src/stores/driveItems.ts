@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { listDriveItems, type DriveItem, type DriveListParams } from '@/api/driveItems'
+import { listDriveItems, getDriveItemBreadcrumb, type DriveItem, type DriveListParams } from '@/api/driveItems'
 
 export type DriveListQuery = Omit<DriveListParams, 'cursor' | 'limit'>
 
@@ -37,9 +37,11 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  const breadcrumb = ref<DriveItem[]>([])
+
   let requestId = 0
   let inFlight: AbortController | null = null
-  let lastQuery: DriveListQuery = { cloudAccountId: 0 }
+  let lastQuery: DriveListQuery = { cloudAccountUuid: '' }
 
   function reset(): void {
     // Abort whatever is in flight, then bump the id so any response that
@@ -52,6 +54,25 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
     hasMore.value = false
     loading.value = false
     error.value = null
+  }
+
+  async function loadBreadcrumb(uuid: string): Promise<void> {
+    if (!uuid) {
+      breadcrumb.value = []
+      return
+    }
+    try {
+      const res = await getDriveItemBreadcrumb(uuid)
+      breadcrumb.value = res.data ?? []
+    } catch {
+      // The bar is decorative: a failure leaves it empty rather than breaking
+      // the listing, which loads independently.
+      breadcrumb.value = []
+    }
+  }
+
+  function clearBreadcrumb(): void {
+    breadcrumb.value = []
   }
 
   function appendPage(page: DriveItem[]): void {
@@ -71,7 +92,7 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
   }
 
   async function load(query: DriveListQuery, from: string): Promise<void> {
-    if (query.cloudAccountId <= 0) return
+    if (!query.cloudAccountUuid) return
 
     lastQuery = query
     const id = ++requestId
@@ -107,5 +128,5 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
     }
   }
 
-  return { items, cursor, hasMore, loading, error, reset, loadFirstPage, loadNextPage }
+  return { items, cursor, hasMore, loading, error, breadcrumb, clearBreadcrumb, loadBreadcrumb, reset, loadFirstPage, loadNextPage }
 })
