@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
+import { driveLocation } from '@/router/drivePaths'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
@@ -43,7 +44,7 @@ interface CloudStorageSummary {
   id: string
   name: string
   account: string
-  icon: any
+  icon: Component
   colorClass: string
   bgColorClass: string
   progressColorClass: string
@@ -71,7 +72,7 @@ interface RecentActivity {
   target: string
   cloud: string
   time: string
-  icon: any
+  icon: Component
   iconColor: string
 }
 
@@ -198,7 +199,7 @@ function activityIconColor(action: string) {
 
 const clouds = computed<CloudStorageSummary[]>(() =>
   (dashboard.value?.clouds ?? []).map((account: CloudAccount) => ({
-    id: String(account.id),
+    id: account.uuid,
     name: account.name,
     account: account.provider,
     icon: Cloud,
@@ -218,7 +219,7 @@ const clouds = computed<CloudStorageSummary[]>(() =>
 
 const suggestedFiles = computed<SuggestedFile[]>(() =>
   (dashboard.value?.suggested_files ?? []).map((item) => {
-    const owner = clouds.value.find((cloud) => cloud.id === String(item.cloud_account_id))
+    const owner = clouds.value.find((cloud) => cloud.id === item.cloud_account_uuid)
     const mime = item.mime_type || ''
     let type: SuggestedFile['type'] = 'doc'
     if (mime.startsWith('image/')) {
@@ -231,7 +232,7 @@ const suggestedFiles = computed<SuggestedFile[]>(() =>
       id: item.uuid,
       name: item.name,
       type,
-      cloudId: String(item.cloud_account_id),
+      cloudId: item.cloud_account_uuid,
       cloudName: owner?.name || '—',
       cloudColor: 'text-emerald-500',
       size: humanizeBytes(item.size),
@@ -247,7 +248,7 @@ const activities = computed<RecentActivity[]>(() =>
       id: String(act.id),
       action: te(key) ? t(key) : act.action,
       target: act.target_name || '—',
-      cloud: clouds.value.find((cloud) => cloud.id === String(act.cloud_id))?.name || '—',
+      cloud: clouds.value.find((cloud) => cloud.id === act.cloud_account_uuid)?.name || '—',
       time: formatRelativeTime(act.created_at),
       icon: activityIcon(act.action),
       iconColor: activityIconColor(act.action),
@@ -269,7 +270,7 @@ const BREAKDOWN_COLORS = [
 const storageBreakdown = computed(() => {
   const total = storage.value?.total_bytes ?? 0
   return (dashboard.value?.clouds ?? []).map((account, index) => ({
-    id: account.id,
+    id: account.uuid,
     name: account.name,
     used: humanizeBytes(account.used_storage),
     colorClass: BREAKDOWN_COLORS[index % BREAKDOWN_COLORS.length],
@@ -282,11 +283,11 @@ const storagePercent = computed(() => {
   return Math.min(100, Math.max(0, percent))
 })
 
-function navigateToDrive(cloudId?: string) {
-  if (cloudId) {
-    router.push({ name: 'drive', query: { cloud: cloudId } })
+function navigateToDrive(cloudUuid?: string) {
+  if (cloudUuid) {
+    router.push(driveLocation(cloudUuid))
   } else {
-    router.push({ name: 'drive' })
+    router.push({ name: 'home' })
   }
 }
 
@@ -384,7 +385,7 @@ function handleAddCloud() {
                   >
                     {{ cloud.badge }}
                   </span>
-                  <SyncCloudButton :account-id="Number(cloud.id)" @synced="handleSynced" />
+                  <SyncCloudButton :account-uuid="cloud.id" @synced="handleSynced" />
                   <div
                     class="h-2 w-2 rounded-full"
                     :class="{

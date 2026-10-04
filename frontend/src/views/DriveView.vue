@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
+import { useDriveItemsStore } from '@/stores/driveItems'
+import { storeToRefs } from 'pinia'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import { Button } from '@/components/ui/button'
 import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
 import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
 import { useDriveItems } from '@/composables/useDriveItems'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { driveLocation } from '@/router/drivePaths'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,11 +38,20 @@ import {
   Loader2,
 } from 'lucide-vue-next'
 
+const props = defineProps<{
+  cloudUuid: string
+  folderUuid?: string
+}>()
+
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const cloudStore = useCloudAccountsStore()
+
+// The account uuid lives in the URL, so a folder view is shareable and the back
+// button works. `cloudAccountUuid` is the string passed straight to the API.
+const cloudAccountUuid = computed(() => props.cloudUuid)
+const parentUuid = computed(() => props.folderUuid ?? null)
 
 type ViewMode = 'list' | 'grid'
 const viewMode = ref<ViewMode>('list')
@@ -49,32 +61,22 @@ const search = ref('')
 const sort = ref('name')
 const order = ref('asc')
 
-// The account id lives in the URL, so a folder view is shareable and the back
-// button works. `0` means "no account selected yet" and the composable skips
-// the request in that case.
-const cloudAccountId = computed(() => {
-  const raw = route.query.cloud
-  const parsed = Number(raw)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-})
+const driveStore = useDriveItemsStore()
+const { breadcrumb } = storeToRefs(driveStore)
 
-// Switching cloud accounts from the sidebar must clear the folder chain and
-// selection; otherwise stale folder ids from the previous account leak into
-// the new query as `parent_id`, producing empty or incorrect results.
-watch(cloudAccountId, () => {
-  folderStack.value = []
-  selectedItemId.value = null
-})
-
-// The API has no path-based lookup, so the folder chain is tracked locally.
-// `.at(-1)` rather than `[length - 1]`: with noUncheckedIndexedAccess an index
-// access is `T | undefined` and would need a non-null assertion to compile.
-const folderStack = ref<{ id: number; name: string }[]>([])
-const parentId = computed(() => folderStack.value.at(-1)?.id ?? null)
+// The breadcrumb's lifecycle is owned by the folder param: a root navigation
+// fires this with an empty uuid, which clears the bar.
+watch(
+  () => props.folderUuid,
+  (uuid) => {
+    void driveStore.loadBreadcrumb(uuid ?? '')
+  },
+  { immediate: true },
+)
 
 const { items, loading, error, hasMore, loadMore, reload } = useDriveItems(() => ({
-  cloudAccountId: cloudAccountId.value,
-  parentId: parentId.value,
+  cloudAccountUuid: cloudAccountUuid.value,
+  parentUuid: parentUuid.value,
   search: search.value,
   sort: sort.value,
   order: order.value,
@@ -98,16 +100,6 @@ onMounted(async () => {
   if (cloudStore.accounts.length === 0) {
     await cloudStore.fetch()
   }
-  // No account in the URL: fall back to the default one. `?? null` is required
-  // because noUncheckedIndexedAccess types `accounts[0]` as possibly undefined
-  // and the length guard above does not narrow an indexed access.
-  if (cloudAccountId.value === 0 && cloudStore.accounts.length > 0) {
-    const fallback =
-      cloudStore.accounts.find((a) => a.is_default) ?? cloudStore.accounts[0] ?? null
-    if (fallback) {
-      void router.replace({ name: 'drive', query: { cloud: String(fallback.id) } })
-    }
-  }
 })
 
 // A sentinel at the end of the list triggers the next page. The observer
@@ -124,17 +116,21 @@ function selectItem(uuid: string) {
 }
 
 function openFolder(uuid: string) {
-  const folder = items.value.find((i) => i.uuid === uuid)
-  if (!folder) return
-  // `parent_id` is the numeric `id`, not the `uuid`: the API has no
-  // path-based lookup, so the chain is tracked locally by id.
-  folderStack.value = [...folderStack.value, { id: folder.id, name: folder.name }]
   selectedItemId.value = null
+  void router.push(driveLocation(props.cloudUuid, uuid))
 }
 
 function goToCrumb(index: number) {
-  folderStack.value = folderStack.value.slice(0, index)
+  // index is the position in the root-first chain; index 0 is the root, which
+  // has no folder segment.
   selectedItemId.value = null
+  if (index <= 0) {
+    void router.push(driveLocation(props.cloudUuid))
+    return
+  }
+  const crumb = breadcrumb.value[index - 1]
+  if (!crumb) return
+  void router.push(driveLocation(props.cloudUuid, crumb.uuid))
 }
 
 /**
@@ -196,8 +192,8 @@ function formatSize(bytes: number): string {
           <!-- Sync the account in view. Hidden until an account is selected,
                since there is nothing to sync without one. -->
           <SyncCloudButton
-            v-if="cloudAccountId > 0"
-            :account-id="cloudAccountId"
+            v-if="cloudAccountUuid"
+            :account-uuid="cloudAccountUuid"
             labeled
             @synced="handleSynced"
           />
@@ -241,11 +237,11 @@ function formatSize(bytes: number): string {
       </div>
 
       <!-- Breadcrumb -->
-      <nav v-if="folderStack.length" class="flex items-center gap-1 text-sm text-muted-foreground">
+      <nav v-if="breadcrumb.length" class="flex items-center gap-1 text-sm text-muted-foreground">
         <button type="button" class="hover:text-foreground cursor-pointer" @click="goToCrumb(0)">
           {{ t('drive.nav_my_drive') }}
         </button>
-        <template v-for="(crumb, index) in folderStack" :key="crumb.id">
+        <template v-for="(crumb, index) in breadcrumb" :key="crumb.uuid">
           <span>/</span>
           <button
             type="button"

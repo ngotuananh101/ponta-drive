@@ -1,8 +1,6 @@
 import { fetchApi, type ApiResponse } from './client'
 
 export interface DriveItem {
-  /** Numeric primary key. This is what `parent_id` refers to. */
-  id: number
   /** Stable public identifier, used for keys and selection in the UI. */
   uuid: string
   name: string
@@ -10,7 +8,7 @@ export interface DriveItem {
   mime_type: string
   size: number
   extension: string
-  cloud_account_id: number
+  cloud_account_uuid: string
   is_starred: boolean
   status: string
   updated_at: string
@@ -26,8 +24,8 @@ export interface DriveListResponse extends ApiResponse<DriveItem[]> {
 }
 
 export interface DriveListParams {
-  cloudAccountId: number
-  parentId?: number | null
+  cloudAccountUuid: string
+  parentUuid?: string | null
   search?: string
   type?: string
   sort?: string
@@ -45,8 +43,8 @@ export interface DriveListParams {
  */
 export function buildDriveItemsQuery(params: DriveListParams): string {
   const query = new URLSearchParams()
-  query.set('cloud_account_id', String(params.cloudAccountId))
-  if (params.parentId) query.set('parent_id', String(params.parentId))
+  query.set('cloud_account_uuid', params.cloudAccountUuid)
+  if (params.parentUuid) query.set('parent_uuid', params.parentUuid)
   if (params.search) query.set('search', params.search)
   if (params.type) query.set('type', params.type)
   if (params.sort) query.set('sort', params.sort)
@@ -69,4 +67,19 @@ export async function listDriveItems(
   signal?: AbortSignal,
 ): Promise<DriveListResponse> {
   return fetchApi<DriveListResponse>(`/v1/drive/items?${buildDriveItemsQuery(params)}`, { signal })
+}
+
+/**
+ * Resolves a folder's ancestor chain, root first and ending with the folder
+ * itself. The drive URL carries only the current folder's uuid, so this is what
+ * turns that uuid back into a full breadcrumb after a reload or a shared link.
+ */
+export async function getDriveItemBreadcrumb(
+  uuid: string,
+  signal?: AbortSignal,
+): Promise<ApiResponse<DriveItem[]>> {
+  return fetchApi<ApiResponse<DriveItem[]>>(
+    `/v1/drive/items/${encodeURIComponent(uuid)}/breadcrumb`,
+    { signal },
+  )
 }
