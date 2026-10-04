@@ -234,6 +234,64 @@ describe('driveItems store', () => {
     expect(store.items.map((i) => i.uuid)).toEqual(['a'])
     expect(store.error).toBe(null)
   })
+
+  it('createFolder prepends the new folder to items', async () => {
+    const newFolder = item('f-new', 'New Folder')
+    newFolder.type = 'folder'
+    vi.spyOn(api, 'createDriveFolder').mockResolvedValue({ status: 'ok', data: newFolder })
+
+    const store = useDriveItemsStore()
+    store.items = [item('a')]
+
+    const res = await store.createFolder('acc-uuid', null, 'New Folder')
+    expect(res.uuid).toBe('f-new')
+    expect(store.items[0]?.uuid).toBe('f-new')
+    expect(store.items).toHaveLength(2)
+  })
+
+  it('rename updates the target item in place', async () => {
+    const updated = item('a', 'Renamed A')
+    vi.spyOn(api, 'renameDriveItem').mockResolvedValue({ status: 'ok', data: updated })
+
+    const store = useDriveItemsStore()
+    store.items = [item('a', 'Old A'), item('b')]
+
+    await store.rename('a', 'Renamed A')
+    expect(store.items[0]?.name).toBe('Renamed A')
+  })
+
+  it('remove deletes the item from items list', async () => {
+    vi.spyOn(api, 'deleteDriveItem').mockResolvedValue({ status: 'ok' })
+
+    const store = useDriveItemsStore()
+    store.items = [item('a'), item('b')]
+
+    await store.remove('a', true)
+    expect(store.items.map((i) => i.uuid)).toEqual(['b'])
+  })
+
+  it('toggleStar replaces item with response', async () => {
+    const starred = { ...item('a'), is_starred: true }
+    vi.spyOn(api, 'toggleStarDriveItem').mockResolvedValue({ status: 'ok', data: starred })
+
+    const store = useDriveItemsStore()
+    store.items = [item('a')]
+
+    await store.toggleStar('a')
+    expect(store.items[0]?.is_starred).toBe(true)
+  })
+
+  it('insertItem adds item if not already present', () => {
+    const store = useDriveItemsStore()
+    store.items = [item('a')]
+
+    store.insertItem(item('b'))
+    expect(store.items.map((i) => i.uuid)).toEqual(['b', 'a'])
+
+    // duplicate is ignored
+    store.insertItem(item('b'))
+    expect(store.items).toHaveLength(2)
+  })
 })
 
 // The sort the user picks only reaches the backend if it survives the query

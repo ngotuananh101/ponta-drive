@@ -1,7 +1,16 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { listDriveItems, getDriveItemBreadcrumb, type DriveItem, type DriveListParams } from '@/api/driveItems'
+import {
+  listDriveItems,
+  getDriveItemBreadcrumb,
+  createDriveFolder,
+  renameDriveItem,
+  deleteDriveItem,
+  toggleStarDriveItem,
+  type DriveItem,
+  type DriveListParams,
+} from '@/api/driveItems'
 
 export type DriveListQuery = Omit<DriveListParams, 'cursor' | 'limit'>
 
@@ -91,6 +100,53 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
     await load(lastQuery, cursor.value)
   }
 
+  function insertItem(item: DriveItem): void {
+    const exists = items.value.some((i) => i.uuid === item.uuid)
+    if (!exists) {
+      if (item.type === 'folder') {
+        items.value = [item, ...items.value]
+      } else {
+        // Folders first: find first non-folder index
+        const firstFileIndex = items.value.findIndex((i) => i.type !== 'folder')
+        if (firstFileIndex === -1) {
+          items.value = [...items.value, item]
+        } else {
+          items.value.splice(firstFileIndex, 0, item)
+        }
+      }
+    }
+  }
+
+  async function createFolder(
+    cloudAccountUuid: string,
+    parentUuid: string | null,
+    name: string,
+  ): Promise<DriveItem> {
+    const res = await createDriveFolder({ cloudAccountUuid, parentUuid, name })
+    const created = res.data as DriveItem
+    insertItem(created)
+    return created
+  }
+
+  async function rename(uuid: string, newName: string): Promise<DriveItem> {
+    const res = await renameDriveItem(uuid, newName)
+    const updated = res.data as DriveItem
+    items.value = items.value.map((i) => (i.uuid === uuid ? updated : i))
+    return updated
+  }
+
+  async function remove(uuid: string, permanent = true): Promise<void> {
+    await deleteDriveItem(uuid, permanent)
+    items.value = items.value.filter((i) => i.uuid !== uuid)
+  }
+
+  async function toggleStar(uuid: string): Promise<DriveItem> {
+    const res = await toggleStarDriveItem(uuid)
+    const updated = res.data as DriveItem
+    items.value = items.value.map((i) => (i.uuid === uuid ? updated : i))
+    return updated
+  }
+
   async function load(query: DriveListQuery, from: string): Promise<void> {
     if (!query.cloudAccountUuid) return
 
@@ -128,5 +184,22 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
     }
   }
 
-  return { items, cursor, hasMore, loading, error, breadcrumb, clearBreadcrumb, loadBreadcrumb, reset, loadFirstPage, loadNextPage }
+  return {
+    items,
+    cursor,
+    hasMore,
+    loading,
+    error,
+    breadcrumb,
+    clearBreadcrumb,
+    loadBreadcrumb,
+    reset,
+    loadFirstPage,
+    loadNextPage,
+    insertItem,
+    createFolder,
+    rename,
+    remove,
+    toggleStar,
+  }
 })
