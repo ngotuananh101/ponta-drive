@@ -9,12 +9,10 @@ import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import AddCloudDialog from '@/components/cloud/AddCloudDialog.vue'
 import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
+import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
 import { Button } from '@/components/ui/button'
 import {
   Cloud,
-  FileText,
-  ImageIcon,
-  FileArchive,
   ArrowUpRight,
   Plus,
   Upload,
@@ -29,6 +27,7 @@ import {
   HardDriveDownload,
 } from 'lucide-vue-next'
 import { fetchDashboardSummary, type CloudAccount, type DashboardSummary } from '@/api/dashboard'
+import type { DriveItem } from '@/api/driveItems'
 
 const { t, te, locale } = useI18n()
 const authStore = useAuthStore()
@@ -58,7 +57,9 @@ interface CloudStorageSummary {
 interface SuggestedFile {
   id: string
   name: string
-  type: 'doc' | 'image' | 'archive'
+  /** The raw item, so the shared `DriveItemIcon` can pick the exact icon. */
+  item: DriveItem
+  isFolder: boolean
   cloudId: string
   cloudName: string
   cloudColor: string
@@ -220,18 +221,12 @@ const clouds = computed<CloudStorageSummary[]>(() =>
 const suggestedFiles = computed<SuggestedFile[]>(() =>
   (dashboard.value?.suggested_files ?? []).map((item) => {
     const owner = clouds.value.find((cloud) => cloud.id === item.cloud_account_uuid)
-    const mime = item.mime_type || ''
-    let type: SuggestedFile['type'] = 'doc'
-    if (mime.startsWith('image/')) {
-      type = 'image'
-    } else if (mime.includes('zip') || mime.includes('compressed')) {
-      type = 'archive'
-    }
 
     return {
       id: item.uuid,
       name: item.name,
-      type,
+      item,
+      isFolder: item.type === 'folder',
       cloudId: item.cloud_account_uuid,
       cloudName: owner?.name || '—',
       cloudColor: 'text-emerald-500',
@@ -284,11 +279,32 @@ const storagePercent = computed(() => {
 })
 
 function navigateToDrive(cloudUuid?: string) {
+  // A missing uuid must not reach `driveLocation`, which throws on an empty
+  // required param; staying on the home page is the only safe destination.
   if (cloudUuid) {
     router.push(driveLocation(cloudUuid))
   } else {
     router.push({ name: 'home' })
   }
+}
+
+/**
+ * A suggested folder opens its folder view; a suggested file has no preview
+ * yet, so it tells the user that feature is still being built rather than
+ * silently doing nothing.
+ */
+function openSuggestedFile(file: SuggestedFile) {
+  if (!file.isFolder) {
+    toast.info(t('home.preview_coming_soon'))
+    return
+  }
+  // A folder whose owning account uuid is missing cannot build a valid URL;
+  // `driveLocation` would throw. Send the user to the drive root instead.
+  if (!file.cloudId) {
+    router.push({ name: 'home' })
+    return
+  }
+  router.push(driveLocation(file.cloudId, file.id))
 }
 
 function handleAddCloud() {
@@ -454,13 +470,14 @@ function handleAddCloud() {
             v-for="file in suggestedFiles"
             :key="file.id"
             class="group rounded-2xl border border-border bg-card hover:bg-accent/40 hover:border-primary/40 transition-all cursor-pointer overflow-hidden shadow-xs flex flex-col"
-            @click="navigateToDrive(file.cloudId)"
+            @click="openSuggestedFile(file)"
           >
             <!-- Preview Mock Area -->
             <div class="h-32 bg-muted/30 flex items-center justify-center border-b border-border/60 relative overflow-hidden group-hover:bg-muted/50 transition-colors">
-              <FileText v-if="file.type === 'doc'" class="h-12 w-12 text-blue-500/80 group-hover:scale-105 transition-transform" />
-              <ImageIcon v-else-if="file.type === 'image'" class="h-12 w-12 text-rose-500/80 group-hover:scale-105 transition-transform" />
-              <FileArchive v-else class="h-12 w-12 text-orange-500/80 group-hover:scale-105 transition-transform" />
+              <DriveItemIcon
+                :item="file.item"
+                size-class="h-12 w-12 group-hover:scale-105 transition-transform"
+              />
 
               <!-- Source Cloud Tag on Preview -->
               <div class="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-md bg-background/90 backdrop-blur-xs border border-border/80 text-[10px] font-medium text-muted-foreground flex items-center gap-1.5 shadow-2xs">

@@ -90,7 +90,10 @@ function onNavClick(itemId: string) {
 function onSelectMyDrive() {
   isMyDriveOpen.value = true
   isMobileMenuOpen.value = false
-  const first = cloudAccounts.value[0]
+  // An account without a uuid cannot build a drive URL; `driveLocation` would
+  // throw on the empty param and the click would silently do nothing. Fall back
+  // to the first account that actually has one.
+  const first = cloudAccounts.value.find((account) => account.uuid)
   if (first) {
     router.push(driveLocation(first.uuid))
   } else {
@@ -100,6 +103,12 @@ function onSelectMyDrive() {
 
 function onSelectCloud(uuid: string) {
   isMobileMenuOpen.value = false
+  // Guard the same way: a missing uuid must not become an unhandled
+  // "Missing required param" error from `router.push`.
+  if (!uuid) {
+    router.push({ name: 'home' })
+    return
+  }
   router.push(driveLocation(uuid))
 }
 
@@ -123,8 +132,8 @@ async function handleLogout() {
         'translate-x-0 shadow-2xl': isMobileMenuOpen,
       }"
     >
-      <!-- Top Section of Sidebar: Logo & Brand (h-16 to match Header height) -->
-      <div class="h-16 px-3.5 flex items-center justify-between shrink-0">
+      <!-- Top Section of Sidebar: Logo & Brand (h-14 to match Header height) -->
+      <div class="h-14 px-3.5 flex items-center justify-between shrink-0">
         <router-link to="/" class="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
           <AppLogo class="h-8 w-8 shrink-0" />
           <span class="font-bold text-lg tracking-tight text-foreground truncate">
@@ -266,7 +275,7 @@ async function handleLogout() {
                 >
                   <button
                     type="button"
-                    class="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                    class="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                     :class="[
                       activeCloudUuid === cloud.uuid && activeNav === 'my_drive'
                         ? 'text-primary font-semibold'
@@ -338,7 +347,7 @@ async function handleLogout() {
     <!-- Right Side: Header (top) + Main Content (workspace) -->
     <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
       <!-- Top Header (Occupies only the remaining width) -->
-      <header class="h-16 border-b border-border bg-card/70 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0 z-20">
+      <header class="h-14 border-b border-border bg-card/70 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0 z-20">
         <!-- Mobile Menu Trigger -->
         <Button
           variant="ghost"
@@ -350,14 +359,14 @@ async function handleLogout() {
         </Button>
 
         <!-- Search Bar (Desktop / Tablet: Left-aligned, only shown in Drive) -->
-        <div v-if="isDriveView" class="hidden sm:flex flex-1 max-w-2xl">
+        <div v-if="isDriveView" class="hidden sm:flex flex-1 max-w-xl">
           <div class="relative flex items-center w-full">
             <Search class="absolute left-3.5 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
               v-model="searchQuery"
               type="text"
               :placeholder="t('drive.search_placeholder')"
-              class="w-full h-11 pl-10 pr-10 rounded-full bg-muted/60 hover:bg-muted/80 focus:bg-background border border-border/70 focus:border-primary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
+              class="w-full h-10 pl-10 pr-10 rounded-full bg-muted/60 hover:bg-muted/80 focus:bg-background border border-border/70 focus:border-primary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
             />
             <button
               type="button"
