@@ -199,6 +199,27 @@ describe('driveItems store', () => {
     expect(store.loading).toBe(false)
   })
 
+  it('loads and clears the breadcrumb', async () => {
+    vi.spyOn(api, 'getDriveItemBreadcrumb').mockResolvedValue({
+      status: 'ok',
+      data: [item('root'), item('sub')],
+    })
+
+    const store = useDriveItemsStore()
+    await store.loadBreadcrumb('sub')
+    expect(store.breadcrumb.map((i) => i.uuid)).toEqual(['root', 'sub'])
+
+    store.clearBreadcrumb()
+    expect(store.breadcrumb).toEqual([])
+  })
+
+  it('leaves the breadcrumb empty when the request fails', async () => {
+    vi.spyOn(api, 'getDriveItemBreadcrumb').mockRejectedValue(new Error('nope'))
+    const store = useDriveItemsStore()
+    await store.loadBreadcrumb('missing')
+    expect(store.breadcrumb).toEqual([])
+  })
+
   it('resets before loading when the search changes', async () => {
     vi.spyOn(api, 'listDriveItems').mockResolvedValue({
       status: 'ok',
