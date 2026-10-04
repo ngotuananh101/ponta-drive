@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
@@ -25,6 +25,11 @@ function account(overrides: Partial<CloudAccount> = {}): CloudAccount {
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.restoreAllMocks()
+  vi.useRealTimers()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('cloudAccounts store', () => {
@@ -133,6 +138,99 @@ describe('cloudAccounts store', () => {
       [1, false],
       [2, true],
     ])
+  })
+})
+
+describe('cloudAccounts store sync', () => {
+  it('flags the account as syncing for the duration of the request', async () => {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.spyOn(api, 'syncCloudAccount').mockReturnValue(pending)
+    vi.spyOn(api, 'listCloudAccounts').mockResolvedValue({
+      status: 'ok',
+      data: [account({ id: 3, sync_status: 'idle' })],
+    })
+
+    const store = useCloudAccountsStore()
+    const done = store.sync(3)
+
+    // The button must show the spinner the instant it is pressed, before the
+    // request resolves - that is the whole point of the local flag.
+    expect(store.isSyncing(3)).toBe(true)
+
+    release()
+    await done
+
+    expect(store.isSyncing(3)).toBe(false)
+  })
+
+  it('refetches until the account leaves the syncing state', async () => {
+    vi.spyOn(api, 'syncCloudAccount').mockResolvedValue({ status: 'ok' })
+    vi.spyOn(api, 'listCloudAccounts')
+      .mockResolvedValueOnce({ status: 'ok', data: [account({ id: 4, sync_status: 'syncing' })] })
+      .mockResolvedValueOnce({ status: 'ok', data: [account({ id: 4, sync_status: 'idle' })] })
+
+    vi.useFakeTimers()
+    const store = useCloudAccountsStore()
+    const done = store.sync(4)
+
+    // First check is immediate (the sync driver may have finished already),
+    // sees "syncing", then waits an interval before the next poll.
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(3000)
+    await done
+
+    expect(store.isSyncing(4)).toBe(false)
+    expect(store.accounts[0]?.sync_status).toBe('idle')
+  })
+
+  it('stops polling after the bounded number of attempts', async () => {
+    vi.spyOn(api, 'syncCloudAccount').mockResolvedValue({ status: 'ok' })
+    // Never settles: a worker that died must not spin the UI forever.
+    const listSpy = vi.spyOn(api, 'listCloudAccounts').mockResolvedValue({
+      status: 'ok',
+      data: [account({ id: 5, sync_status: 'syncing' })],
+    })
+
+    vi.useFakeTimers()
+    const store = useCloudAccountsStore()
+    const done = store.sync(5)
+
+    await vi.advanceTimersByTimeAsync(3000 * 10 + 100)
+    await done
+
+    expect(listSpy.mock.calls.length).toBeLessThanOrEqual(10)
+    expect(store.isSyncing(5)).toBe(false)
+  })
+
+  it('clears the syncing flag and rethrows when the sync request fails', async () => {
+    vi.spyOn(api, 'syncCloudAccount').mockRejectedValue(new Error('boom'))
+
+    const store = useCloudAccountsStore()
+    await expect(store.sync(6)).rejects.toThrow('boom')
+
+    expect(store.isSyncing(6)).toBe(false)
+  })
+
+  // A transient list failure mid-poll must not strand the account: the loop
+  // keeps trying rather than giving up on the first blip.
+  it('keeps polling when a refetch fails transiently', async () => {
+    vi.spyOn(api, 'syncCloudAccount').mockResolvedValue({ status: 'ok' })
+    vi.spyOn(api, 'listCloudAccounts')
+      .mockRejectedValueOnce(new Error('network blip'))
+      .mockResolvedValueOnce({ status: 'ok', data: [account({ id: 7, sync_status: 'idle' })] })
+
+    vi.useFakeTimers()
+    const store = useCloudAccountsStore()
+    const done = store.sync(7)
+
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(3000)
+    await done
+
+    expect(store.isSyncing(7)).toBe(false)
   })
 })
 

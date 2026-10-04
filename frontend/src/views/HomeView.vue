@@ -4,8 +4,10 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
+import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import AddCloudDialog from '@/components/cloud/AddCloudDialog.vue'
+import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
 import { Button } from '@/components/ui/button'
 import {
   Cloud,
@@ -29,6 +31,7 @@ import { fetchDashboardSummary, type CloudAccount, type DashboardSummary } from 
 
 const { t, te, locale } = useI18n()
 const authStore = useAuthStore()
+const cloudStore = useCloudAccountsStore()
 const router = useRouter()
 
 const isAddCloudOpen = ref(false)
@@ -72,11 +75,7 @@ interface RecentActivity {
   iconColor: string
 }
 
-onMounted(async () => {
-  if (!authStore.user) {
-    await authStore.fetchUser()
-  }
-
+async function loadDashboard(): Promise<void> {
   try {
     const response = await fetchDashboardSummary()
     if (response.data) {
@@ -84,10 +83,29 @@ onMounted(async () => {
     }
   } catch {
     toast.error(t('home.load_failed'))
-  } finally {
-    loading.value = false
   }
+}
+
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchUser()
+  }
+  if (cloudStore.accounts.length === 0) {
+    void cloudStore.fetch()
+  }
+
+  await loadDashboard()
+  loading.value = false
 })
+
+/**
+ * Reloads the summary after a card's sync finishes, so the status dot and
+ * storage figures reflect the scan. `SyncCloudButton` owns the request, the
+ * spinner and the toast; this view only refreshes what it renders.
+ */
+async function handleSynced() {
+  await loadDashboard()
+}
 
 /** Formats a byte count into a compact human-readable string (binary units). */
 function humanizeBytes(bytes: number): string {
@@ -366,6 +384,7 @@ function handleAddCloud() {
                   >
                     {{ cloud.badge }}
                   </span>
+                  <SyncCloudButton :account-id="Number(cloud.id)" @synced="handleSynced" />
                   <div
                     class="h-2 w-2 rounded-full"
                     :class="{

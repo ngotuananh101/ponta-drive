@@ -37,7 +37,11 @@
     "next": "Tiếp tục",
     "badge_default": "Mặc định",
     "load_failed": "Không tải được danh sách tài khoản.",
-    "empty": "Chưa có tài khoản lưu trữ nào."
+    "empty": "Chưa có tài khoản lưu trữ nào.",
+    "sync": "Đồng bộ",
+    "syncing": "Đang đồng bộ...",
+    "sync_started": "Đã bắt đầu đồng bộ dữ liệu.",
+    "sync_failed": "Đồng bộ thất bại. Vui lòng thử lại."
   },
   "theme": {
     "toggle_theme": "Chuyển đổi giao diện",
