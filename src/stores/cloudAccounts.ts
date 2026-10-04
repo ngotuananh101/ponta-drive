@@ -6,9 +6,23 @@ import {
   createCloudAccount,
   updateCloudAccount,
   deleteCloudAccount,
+  syncCloudAccount,
   type CloudAccount,
   type CloudAccountPayload,
 } from '@/api/cloudAccounts'
+
+/**
+ * How long to wait between polls while a queued sync runs, and how many times
+ * to poll before giving up. A full bucket scan can take minutes, so the loop is
+ * bounded rather than waiting forever; the account's own `sync_status` is the
+ * source of truth and the list refetch picks up the final state.
+ */
+const SYNC_POLL_INTERVAL_MS = 3000
+const SYNC_POLL_MAX_ATTEMPTS = 10
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 /**
  * Holds the account list for the whole app.
@@ -21,6 +35,30 @@ export const useCloudAccountsStore = defineStore('cloudAccounts', () => {
   const accounts = ref<CloudAccount[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  /**
+   * Ids with a sync request in flight. The account's `sync_status` also goes to
+   * "syncing", but that field is only as fresh as the last refetch; this set is
+   * set the instant the button is pressed, so the spinner appears immediately
+   * and every view can disable its button without waiting for a round trip.
+   */
+  const syncingIds = ref<Set<number>>(new Set())
+
+  function isSyncing(id: number): boolean {
+    return syncingIds.value.has(id)
+  }
+
+  function setSyncing(id: number, on: boolean): void {
+    const next = new Set(syncingIds.value)
+    if (on) {
+      next.add(id)
+    } else {
+      next.delete(id)
+    }
+    // A Set is mutated in place; assigning a new one is what triggers Vue's
+    // reactivity for `syncingIds`.
+    syncingIds.value = next
+  }
 
   async function fetch(): Promise<void> {
     loading.value = true
@@ -66,5 +104,70 @@ export const useCloudAccountsStore = defineStore('cloudAccounts', () => {
     )
   }
 
-  return { accounts, loading, error, fetch, create, update, remove, setDefault }
+  /**
+   * Polls the account list until the given account leaves the "syncing" state,
+   * then stops. Bounded by SYNC_POLL_MAX_ATTEMPTS so a scan that never finishes
+   * (or a worker that died) cannot leave the UI spinning forever.
+   *
+   * The first check happens immediately: with the "sync" queue driver the scan
+   * already finished by the time the request returned, so waiting a full
+   * interval before the first fetch would show a needless spinner.
+   */
+  async function pollUntilSettled(id: number): Promise<void> {
+    for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
+      if (attempt > 0) {
+        await sleep(SYNC_POLL_INTERVAL_MS)
+      }
+      try {
+        await fetch()
+      } catch {
+        // `fetch` records the error itself; keep polling, a transient failure
+        // should not strand the account in the "syncing" state.
+      }
+      // Only a *confirmed* non-syncing status ends the loop. A missing account
+      // means the refetch failed (the list is stale or empty), not that the
+      // sync finished, so keep polling - the attempt bound stops it either way.
+      const current = accounts.value.find((a) => a.id === id)
+      if (current && current.sync_status !== 'syncing') {
+        break
+      }
+    }
+    setSyncing(id, false)
+  }
+
+  /**
+   * Triggers a bucket sync and tracks it to completion. The request itself
+   * returns as soon as the job is queued (or, with the sync driver, once the
+   * scan finishes), so the account is shown as syncing and the list is polled
+   * until `sync_status` settles.
+   */
+  async function sync(id: number): Promise<void> {
+    setSyncing(id, true)
+    // Reflect the queued state immediately so a view that reads the account
+    // rather than `isSyncing(id)` shows the spinner too.
+    accounts.value = accounts.value.map((a) =>
+      a.id === id ? { ...a, sync_status: 'syncing' as const } : a,
+    )
+    try {
+      await syncCloudAccount(id)
+    } catch (e) {
+      setSyncing(id, false)
+      throw e
+    }
+    await pollUntilSettled(id)
+  }
+
+  return {
+    accounts,
+    loading,
+    error,
+    syncingIds,
+    isSyncing,
+    fetch,
+    create,
+    update,
+    remove,
+    setDefault,
+    sync,
+  }
 })

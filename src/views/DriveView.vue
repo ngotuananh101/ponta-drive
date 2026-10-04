@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import { Button } from '@/components/ui/button'
+import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
 import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
 import { useDriveItems } from '@/composables/useDriveItems'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
@@ -136,6 +137,14 @@ function goToCrumb(index: number) {
   selectedItemId.value = null
 }
 
+/**
+ * Reloads the listing after a sync finishes, so the newly scanned items
+ * appear. `SyncCloudButton` owns the request, spinner and toast.
+ */
+function handleSynced() {
+  reload()
+}
+
 function formatSize(bytes: number): string {
   if (!bytes) return '—'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -184,6 +193,15 @@ function formatSize(bytes: number): string {
 
         <!-- Right Toolbar (View Switcher & Info) -->
         <div class="flex items-center gap-1.5">
+          <!-- Sync the account in view. Hidden until an account is selected,
+               since there is nothing to sync without one. -->
+          <SyncCloudButton
+            v-if="cloudAccountId > 0"
+            :account-id="cloudAccountId"
+            labeled
+            @synced="handleSynced"
+          />
+
           <!-- List / Grid Toggle -->
           <div class="flex items-center h-8 bg-card border border-border rounded-lg p-0.5 shadow-xs">
             <Button

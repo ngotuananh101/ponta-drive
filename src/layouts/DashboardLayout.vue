@@ -9,6 +9,7 @@ import { AppLogo } from '@/components/icons'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import AddCloudDialog from '@/components/cloud/AddCloudDialog.vue'
+import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
 import { providerMeta } from '@/components/cloud/providerMeta'
 import { Button } from '@/components/ui/button'
 import {
@@ -242,33 +243,47 @@ async function handleLogout() {
                    evaluated before the loop. A `<template>` wrapper keeps the
                    buttons as direct children, so the layout is unchanged. -->
               <template v-else>
-                <button
+                <!-- A row is a container, not a button: the sync control is a
+                     second interactive element, and a button cannot be nested
+                     inside another button. The account button keeps the select
+                     action; sync sits beside it and appears on hover (or while
+                     it is running, so the spinner stays visible). -->
+                <div
                   v-for="cloud in cloudAccounts"
                   :key="cloud.id"
-                  type="button"
-                  class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                  class="group w-full flex items-center gap-1 rounded-lg pr-1 transition-colors"
                   :class="[
                     activeCloudId === String(cloud.id) && activeNav === 'my_drive'
-                      ? 'bg-primary/10 text-primary font-semibold shadow-2xs'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                      ? 'bg-primary/10 shadow-2xs'
+                      : 'hover:bg-accent/50',
                   ]"
-                  @click="onSelectCloud(String(cloud.id))"
                 >
-                  <div class="flex items-center gap-2 min-w-0">
+                  <button
+                    type="button"
+                    class="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                    :class="[
+                      activeCloudId === String(cloud.id) && activeNav === 'my_drive'
+                        ? 'text-primary font-semibold'
+                        : 'text-muted-foreground group-hover:text-foreground',
+                    ]"
+                    @click="onSelectCloud(String(cloud.id))"
+                  >
                     <component
                       :is="providerMeta(cloud.provider).icon"
                       class="h-3.5 w-3.5 shrink-0"
                       :class="providerMeta(cloud.provider).color"
                     />
                     <span class="truncate">{{ cloud.name }}</span>
-                  </div>
-                  <span
-                    v-if="cloud.is_default"
-                    class="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider shrink-0"
-                  >
-                    {{ t('cloud.badge_default') }}
-                  </span>
-                </button>
+                    <span
+                      v-if="cloud.is_default"
+                      class="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider shrink-0"
+                    >
+                      {{ t('cloud.badge_default') }}
+                    </span>
+                  </button>
+
+                  <SyncCloudButton :account-id="cloud.id" />
+                </div>
               </template>
 
               <!-- "+ Thêm Cloud" Action Button - renders unconditionally below

@@ -37,7 +37,11 @@
     "next": "Next",
     "badge_default": "Default",
     "load_failed": "Could not load your storage accounts.",
-    "empty": "No storage accounts yet."
+    "empty": "No storage accounts yet.",
+    "sync": "Sync",
+    "syncing": "Syncing...",
+    "sync_started": "Sync started.",
+    "sync_failed": "Sync failed. Please try again."
   },
   "theme": {
     "toggle_theme": "Toggle theme",
