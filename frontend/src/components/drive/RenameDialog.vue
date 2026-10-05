@@ -57,7 +57,7 @@ async function submit() {
     emit('renamed', updated)
   } catch (e) {
     console.error(e)
-    error.value = e instanceof Error ? e.message : t('drive.rename_title')
+    error.value = e instanceof Error ? e.message : t('drive.action_failed')
   } finally {
     saving.value = false
   }

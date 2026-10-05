@@ -56,7 +56,7 @@ async function submit() {
     emit('created', item)
   } catch (e) {
     console.error(e)
-    error.value = e instanceof Error ? e.message : t('drive.new_folder_title')
+    error.value = e instanceof Error ? e.message : t('drive.action_failed')
   } finally {
     creating.value = false
   }

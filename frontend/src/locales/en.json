@@ -190,6 +190,7 @@
     "delete_permanent_note": "This action cannot be undone.",
     "delete_button": "Delete permanently",
     "cancel_button": "Cancel",
+    "action_failed": "Action failed. Please try again.",
     "upload_title": "Upload files & folders",
     "upload_method_title": "Upload method",
     "upload_method_direct": "Direct to S3 (Presigned)",
