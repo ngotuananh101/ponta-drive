@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import RenameDialog from '../RenameDialog.vue'
+import { ApiError } from '@/api/client'
 import { useDriveItemsStore } from '@/stores/driveItems'
 import type { DriveItem } from '@/api/driveItems'
 import viLocale from '@/locales/vi.json'
@@ -76,5 +77,48 @@ describe('RenameDialog', () => {
     ) as HTMLButtonElement
     expect(button).not.toBeNull()
     expect(button.disabled).toBe(true)
+  })
+
+  it('renders the localized action_failed message for a non-ApiError rejection', async () => {
+    const store = useDriveItemsStore()
+    vi.spyOn(store, 'rename').mockRejectedValue(new Error('Failed to fetch'))
+
+    const wrapper = mountDialog(testItem)
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.rename_title))
+
+    const input = document.querySelector<HTMLInputElement>('input')!
+    input.value = 'New Name.pdf'
+    input.dispatchEvent(new Event('input'))
+    await wrapper.vm.$nextTick()
+
+    const button = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(viLocale.drive.rename_save),
+    )!
+    button.click()
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(viLocale.drive.action_failed),
+    )
+    expect(document.body.textContent).not.toContain('Failed to fetch')
+  })
+
+  it('renders the backend message when the failure is an ApiError', async () => {
+    const store = useDriveItemsStore()
+    vi.spyOn(store, 'rename').mockRejectedValue(new ApiError('Tên đã tồn tại', 422))
+
+    const wrapper = mountDialog(testItem)
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.rename_title))
+
+    const input = document.querySelector<HTMLInputElement>('input')!
+    input.value = 'New Name.pdf'
+    input.dispatchEvent(new Event('input'))
+    await wrapper.vm.$nextTick()
+
+    const button = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(viLocale.drive.rename_save),
+    )!
+    button.click()
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Tên đã tồn tại'))
   })
 })
