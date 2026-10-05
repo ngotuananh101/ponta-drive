@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUpload } from '../useUpload'
 import * as uploadApi from '@/api/upload'
+import * as driveItemsApi from '@/api/driveItems'
+import { useDriveItemsStore } from '@/stores/driveItems'
 import type { DriveItem } from '@/api/driveItems'
 
 const mockItem: DriveItem = {
@@ -244,5 +246,192 @@ describe('useUpload composable', () => {
 
     clearQueue()
     expect(uploadQueue.value).toHaveLength(0)
+  })
+
+  it('preserves the directory tree for a folder upload', async () => {
+    const initSpy = vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
+      status: 'ok',
+      data: {
+        item_uuid: 'item-1',
+        upload_url: 'https://s3.example.com/put',
+        method: 'PUT',
+        headers: {},
+        expires_at: '',
+        item: mockItem,
+      },
+    })
+    vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
+    vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
+
+    const photosFolder: DriveItem = {
+      uuid: 'folder-photos',
+      name: 'photos',
+      type: 'folder',
+      mime_type: 'application/vnd.folder',
+      size: 0,
+      extension: '',
+      cloud_account_uuid: 'cloud-1',
+      is_starred: false,
+      status: 'ready',
+      updated_at: '2026-10-04 00:00:00',
+    }
+    const year2024Folder: DriveItem = {
+      uuid: 'folder-2024',
+      name: '2024',
+      type: 'folder',
+      mime_type: 'application/vnd.folder',
+      size: 0,
+      extension: '',
+      cloud_account_uuid: 'cloud-1',
+      is_starred: false,
+      status: 'ready',
+      updated_at: '2026-10-04 00:00:00',
+    }
+
+    const createFolderSpy = vi
+      .spyOn(driveItemsApi, 'createDriveFolder')
+      .mockImplementation(async ({ name }) => {
+        const folder = name === 'photos' ? photosFolder : year2024Folder
+        return { status: 'ok', data: folder }
+      })
+
+    const { uploadQueue, startUpload } = useUpload()
+
+    const file = new File(['content'], 'a.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'photos/2024/a.jpg' })
+
+    const res = await startUpload({
+      cloudAccountUuid: 'cloud-1',
+      parentUuid: 'root-parent',
+      files: [file],
+      method: 'direct',
+    })
+
+    // createDriveFolder called for top-level "photos" (parent = root-parent)...
+    expect(createFolderSpy).toHaveBeenCalledWith({
+      cloudAccountUuid: 'cloud-1',
+      parentUuid: 'root-parent',
+      name: 'photos',
+    })
+    // ...and for nested "2024" (parent = uuid returned for "photos").
+    expect(createFolderSpy).toHaveBeenCalledWith({
+      cloudAccountUuid: 'cloud-1',
+      parentUuid: photosFolder.uuid,
+      name: '2024',
+    })
+    // "photos" is created via the store (which calls createDriveFolder), and
+    // "2024" is created via the raw API — both go through createDriveFolder.
+    expect(createFolderSpy).toHaveBeenCalledTimes(2)
+
+    // The file's presigned upload targets the deepest folder (2024).
+    expect(initSpy).toHaveBeenCalledTimes(1)
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentUuid: year2024Folder.uuid,
+        fileName: 'a.jpg',
+      }),
+    )
+
+    expect(res).toHaveLength(1)
+    expect(uploadQueue.value[0].status).toBe('completed')
+    expect(initSpy.mock.calls[0][0].parentUuid).toBe('folder-2024')
+  })
+
+  it('reuses an existing top-level folder instead of creating a duplicate', async () => {
+    const initSpy = vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
+      status: 'ok',
+      data: {
+        item_uuid: 'item-1',
+        upload_url: 'https://s3.example.com/put',
+        method: 'PUT',
+        headers: {},
+        expires_at: '',
+        item: mockItem,
+      },
+    })
+    vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
+    vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
+
+    const existingPhotosFolder: DriveItem = {
+      uuid: 'folder-existing-photos',
+      name: 'photos',
+      type: 'folder',
+      mime_type: 'application/vnd.folder',
+      size: 0,
+      extension: '',
+      cloud_account_uuid: 'cloud-1',
+      is_starred: false,
+      status: 'ready',
+      updated_at: '2026-10-04 00:00:00',
+    }
+
+    const createFolderSpy = vi
+      .spyOn(driveItemsApi, 'createDriveFolder')
+      .mockResolvedValue({ status: 'ok', data: { uuid: 'folder-nested', name: '2024', type: 'folder' } as DriveItem })
+
+    const store = useDriveItemsStore()
+    store.items = [existingPhotosFolder]
+    const storeCreateSpy = vi.spyOn(store, 'createFolder').mockResolvedValue(existingPhotosFolder)
+
+    const { startUpload } = useUpload()
+
+    const file = new File(['content'], 'a.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'photos/2024/a.jpg' })
+
+    await startUpload({
+      cloudAccountUuid: 'cloud-1',
+      parentUuid: 'root-parent',
+      files: [file],
+      method: 'direct',
+    })
+
+    // The top-level "photos" folder already exists, so it must be reused and
+    // NOT created via either the store or the raw API.
+    expect(storeCreateSpy).not.toHaveBeenCalled()
+    expect(createFolderSpy).toHaveBeenCalledTimes(1)
+    expect(createFolderSpy).toHaveBeenCalledWith({
+      cloudAccountUuid: 'cloud-1',
+      parentUuid: existingPhotosFolder.uuid,
+      name: '2024',
+    })
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ parentUuid: 'folder-nested', fileName: 'a.jpg' }),
+    )
+  })
+
+  it('does not create folders for a flat file selection', async () => {
+    const initSpy = vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
+      status: 'ok',
+      data: {
+        item_uuid: 'item-1',
+        upload_url: 'https://s3.example.com/put',
+        method: 'PUT',
+        headers: {},
+        expires_at: '',
+        item: mockItem,
+      },
+    })
+    vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
+    vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
+
+    const createFolderSpy = vi.spyOn(driveItemsApi, 'createDriveFolder').mockResolvedValue({ status: 'ok', data: mockItem })
+
+    const store = useDriveItemsStore()
+    const storeCreateSpy = vi.spyOn(store, 'createFolder').mockResolvedValue(mockItem)
+
+    const { startUpload } = useUpload()
+    const file = new File(['content'], 'flat.txt', { type: 'text/plain' })
+    // No webkitRelativePath -> flat selection.
+
+    await startUpload({
+      cloudAccountUuid: 'cloud-1',
+      parentUuid: 'p',
+      files: [file],
+      method: 'direct',
+    })
+
+    expect(createFolderSpy).not.toHaveBeenCalled()
+    expect(storeCreateSpy).not.toHaveBeenCalled()
+    expect(initSpy).toHaveBeenCalledWith(expect.objectContaining({ parentUuid: 'p' }))
   })
 })

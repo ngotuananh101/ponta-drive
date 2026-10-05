@@ -9,6 +9,7 @@ import {
   uploadDirectToS3,
 } from '@/api/upload'
 import type { DriveItem } from '@/api/driveItems'
+import { createDriveFolder } from '@/api/driveItems'
 import { useDriveItemsStore } from '@/stores/driveItems'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 
@@ -155,13 +156,69 @@ export function useUpload() {
       status: 'pending' as const,
     }))
 
+    // Folder upload: recreate the directory tree before uploading files so a
+    // picked folder tree preserves its nested structure instead of flattening
+    // into the current directory. See spec §6.4.
+    const hasTree = queue.value.some((q) => q.relativePath !== '')
+    // Map from directory path (without trailing slash; '' = parent) -> folder uuid.
+    const dirUuidByPath: Record<string, string | null> = { '': options.parentUuid ?? null }
+
+    if (hasTree) {
+      // Collect every directory path implied by a file's relativePath, then sort
+      // by depth ascending so parents are created before children.
+      const dirPaths = new Set<string>()
+      for (const q of queue.value) {
+        const relPath = q.relativePath ?? ''
+        const parts = relPath.split('/')
+        // parts[last] is the filename; accumulate every ancestor directory.
+        for (let i = 0; i < parts.length - 1; i++) {
+          dirPaths.add(parts.slice(0, i + 1).join('/'))
+        }
+      }
+      const sortedDirs = [...dirPaths].sort((a, b) => a.split('/').length - b.split('/').length)
+
+      for (const dirPath of sortedDirs) {
+        const parts = dirPath.split('/')
+        const name = parts[parts.length - 1]!
+        const parentPath = parts.slice(0, -1).join('/')
+        const parentUuid: string | null = dirUuidByPath[parentPath] ?? options.parentUuid ?? null
+
+        let uuid: string
+        if (parentPath === '') {
+          // Top-level directory: reuse an existing same-named folder in the
+          // current listing, otherwise create (and insert) a new one.
+          const existing = driveStore.items.find(
+            (i) => i.type === 'folder' && i.name === name,
+          )
+          if (existing) {
+            uuid = existing.uuid
+          } else {
+            const created = await driveStore.createFolder(options.cloudAccountUuid, parentUuid, name)
+            uuid = created.uuid
+          }
+        } else {
+          // Nested directory: create via the raw API (do NOT insert into the
+          // current listing, which would misplace the sub-folder).
+          const res = await createDriveFolder({ cloudAccountUuid: options.cloudAccountUuid, parentUuid, name })
+          uuid = (res.data as DriveItem).uuid
+        }
+        dirUuidByPath[dirPath] = uuid
+      }
+    }
+
     for (const qItem of queue.value) {
       try {
+        // Resolve the target parent folder for this file. Flat selections
+        // (empty relativePath) upload into the original parent.
+        const relPath = qItem.relativePath ?? ''
+        const targetParent: string | null = hasTree
+          ? (dirUuidByPath[relPath.replace(/\/[^/]*$/, '')] ?? options.parentUuid ?? null)
+          : options.parentUuid ?? null
         let item: DriveItem
         if (options.method === 'direct') {
-          item = await uploadDirect(qItem, options.cloudAccountUuid, options.parentUuid)
+          item = await uploadDirect(qItem, options.cloudAccountUuid, targetParent)
         } else {
-          item = await uploadServerMultipart(qItem, options.cloudAccountUuid, options.parentUuid)
+          item = await uploadServerMultipart(qItem, options.cloudAccountUuid, targetParent)
         }
         completedItems.push(item)
         options.onItemCompleted?.(item)

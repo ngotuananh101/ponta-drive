@@ -59,4 +59,27 @@ describe('NewFolderDialog', () => {
     await vi.waitFor(() => expect(createSpy).toHaveBeenCalledWith('cloud-1', null, 'Project Photos'))
     expect(wrapper.emitted('created')).toBeTruthy()
   })
+
+  it('renders the localized action_failed message for a non-ApiError rejection', async () => {
+    const store = useDriveItemsStore()
+    vi.spyOn(store, 'createFolder').mockRejectedValue(new Error('Failed to fetch'))
+
+    mountDialog({ cloudAccountUuid: 'cloud-1', parentUuid: null })
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.new_folder_title))
+
+    const input = document.querySelector<HTMLInputElement>('input')!
+    input.value = 'Some Folder'
+    input.dispatchEvent(new Event('input'))
+    await vi.waitFor(() => expect(true).toBe(true))
+
+    const button = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(viLocale.drive.new_folder_create),
+    )!
+    button.click()
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(viLocale.drive.action_failed),
+    )
+    expect(document.body.textContent).not.toContain('Failed to fetch')
+  })
 })

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useDriveItemsStore } from '@/stores/driveItems'
+import { ApiError } from '@/api/client'
 import type { DriveItem } from '@/api/driveItems'
 
 const open = defineModel<boolean>('open', { required: true })
@@ -44,7 +45,7 @@ async function confirm() {
     emit('deleted', props.item.uuid)
   } catch (e) {
     console.error(e)
-    error.value = e instanceof Error ? e.message : t('drive.action_failed')
+    error.value = e instanceof ApiError ? e.message : t('drive.action_failed')
   } finally {
     deleting.value = false
   }

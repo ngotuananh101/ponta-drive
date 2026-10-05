@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useDriveItemsStore } from '@/stores/driveItems'
+import { ApiError } from '@/api/client'
 import type { DriveItem } from '@/api/driveItems'
 
 const open = defineModel<boolean>('open', { required: true })
@@ -56,7 +57,7 @@ async function submit() {
     emit('created', item)
   } catch (e) {
     console.error(e)
-    error.value = e instanceof Error ? e.message : t('drive.action_failed')
+    error.value = e instanceof ApiError ? e.message : t('drive.action_failed')
   } finally {
     creating.value = false
   }

@@ -104,4 +104,57 @@ describe('UploadDialog', () => {
       ),
     )
   })
+
+  it('auto-opens the folder picker when initialMode is "folder"', async () => {
+    const startUploadMock = vi.fn().mockResolvedValue([])
+    vi.spyOn(useUploadModule, 'useUpload').mockReturnValue({
+      uploadQueue: ref([]),
+      isUploading: ref(false),
+      startUpload: startUploadMock,
+      cancelItem: vi.fn(),
+      clearQueue: vi.fn(),
+    })
+
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click')
+
+    const wrapper = mount(UploadDialog, {
+      props: { open: false, cloudAccountUuid: 'cloud-1', parentUuid: null, initialMode: 'folder' },
+      global: { plugins: [createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })] },
+      attachTo: document.body,
+    })
+
+    // Toggle open to trigger the watch (Vue watch does not fire for the initial value).
+    await wrapper.setProps({ open: true })
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
+    await vi.waitFor(() => expect(clickSpy).toHaveBeenCalled())
+
+    clickSpy.mockRestore()
+  })
+
+  it('does NOT auto-open the folder picker when initialMode is "file"', async () => {
+    const startUploadMock = vi.fn().mockResolvedValue([])
+    vi.spyOn(useUploadModule, 'useUpload').mockReturnValue({
+      uploadQueue: ref([]),
+      isUploading: ref(false),
+      startUpload: startUploadMock,
+      cancelItem: vi.fn(),
+      clearQueue: vi.fn(),
+    })
+
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click')
+
+    const wrapper = mount(UploadDialog, {
+      props: { open: false, cloudAccountUuid: 'cloud-1', parentUuid: null, initialMode: 'file' },
+      global: { plugins: [createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })] },
+      attachTo: document.body,
+    })
+
+    // Toggle open to trigger the watch (Vue watch does not fire for the initial value).
+    await wrapper.setProps({ open: true })
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
+    await wrapper.vm.$nextTick()
+
+    expect(clickSpy).not.toHaveBeenCalled()
+    clickSpy.mockRestore()
+  })
 })
