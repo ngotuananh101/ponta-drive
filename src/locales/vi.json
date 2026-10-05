@@ -190,6 +190,7 @@
     "delete_permanent_note": "Hành động này không thể hoàn tác.",
     "delete_button": "Xóa vĩnh viễn",
     "cancel_button": "Hủy",
+    "action_failed": "Thao tác thất bại. Vui lòng thử lại.",
     "upload_title": "Tải tệp & thư mục lên",
     "upload_method_title": "Phương thức tải lên",
     "upload_method_direct": "Trực tiếp lên S3 (Direct Upload)",

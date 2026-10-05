@@ -64,6 +64,17 @@ describe('RenameDialog', () => {
     button.click()
 
     await vi.waitFor(() => expect(renameSpy).toHaveBeenCalledWith('item-1', 'New Name.pdf'))
-    expect(wrapper.emitted('renamed')).toBeTruthy()
+    expect(wrapper.emitted('renamed')?.[0]?.[0]).toEqual({ ...testItem, name: 'New Name.pdf' })
+  })
+
+  it('disables the Save button when the input holds the unchanged original name', async () => {
+    mountDialog(testItem)
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.rename_title))
+
+    const button = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(viLocale.drive.rename_save),
+    ) as HTMLButtonElement
+    expect(button).not.toBeNull()
+    expect(button.disabled).toBe(true)
   })
 })
