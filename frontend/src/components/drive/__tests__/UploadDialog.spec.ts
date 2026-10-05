@@ -58,6 +58,48 @@ describe('UploadDialog', () => {
         expect.objectContaining({
           cloudAccountUuid: 'cloud-1',
           files: [file],
+          method: 'direct',
+        }),
+      ),
+    )
+  })
+
+  it('selects server method card and threads it into startUpload', async () => {
+    const startUploadMock = vi.fn().mockResolvedValue([])
+    vi.spyOn(useUploadModule, 'useUpload').mockReturnValue({
+      uploadQueue: ref([]),
+      isUploading: ref(false),
+      startUpload: startUploadMock,
+      cancelItem: vi.fn(),
+      clearQueue: vi.fn(),
+    })
+
+    mountDialog('file')
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
+
+    const file = new File(['content'], 'sample.txt', { type: 'text/plain' })
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')
+    Object.defineProperty(input, 'files', { value: [file] })
+    await input.dispatchEvent(new Event('change'))
+
+    const serverCard = [...document.querySelectorAll<HTMLDivElement>('div')].find(
+      (el) =>
+        el.className.includes('cursor-pointer') &&
+        el.textContent?.includes(viLocale.drive.upload_method_server),
+    )!
+    serverCard.click()
+
+    const startBtn = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(viLocale.drive.upload_start),
+    )!
+    startBtn.click()
+
+    await vi.waitFor(() =>
+      expect(startUploadMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cloudAccountUuid: 'cloud-1',
+          files: [file],
+          method: 'server',
         }),
       ),
     )
