@@ -568,7 +568,7 @@ function openMove(item: DriveItem) {
       v-model:open="isDeleteOpen"
       :item="activeItem"
     />
-    <MoveDialog v-model:open="isMoveOpen" :item="activeItem" />
+    <MoveDialog v-model:open="isMoveOpen" :item="activeItem" :parent-uuid="parentUuid" />
     <UploadDialog
       v-model:open="isUploadOpen"
       :cloud-account-uuid="cloudAccountUuid"

@@ -20,6 +20,7 @@ const open = defineModel<boolean>('open', { required: true })
 
 const props = defineProps<{
   item: DriveItem | null
+  parentUuid?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -42,7 +43,6 @@ const error = ref<string | null>(null)
 interface VisibleNode {
   node: DriveItem
   depth: number
-  hasChildren: boolean
 }
 
 /** Flattened tree built from rootFolders + expanded + childrenOf. */
@@ -50,11 +50,9 @@ const visibleNodes = computed<VisibleNode[]>(() => {
   const rows: VisibleNode[] = []
   const walk = (folders: DriveItem[], depth: number) => {
     for (const node of folders) {
-      const childFolders = childrenOf.value[node.uuid]
-      const hasChildren = !!childFolders && childFolders.length > 0
-      rows.push({ node, depth, hasChildren })
+      rows.push({ node, depth })
       if (expanded.value.has(node.uuid)) {
-        walk(childFolders ?? [], depth + 1)
+        walk(childrenOf.value[node.uuid] ?? [], depth + 1)
       }
     }
   }
@@ -143,6 +141,17 @@ function select(uuid: string | null) {
 
 async function submit() {
   if (!props.item) return
+
+  // No-op move: the item already lives in the selected destination. Close
+  // without calling store.move, whose unconditional filter would otherwise drop
+  // the item from the listing it still belongs to.
+  const currentParent = props.parentUuid ?? null
+  const target = selectedUuid.value ?? null
+  if (target === currentParent) {
+    open.value = false
+    return
+  }
+
   moving.value = true
   error.value = null
   try {
@@ -196,7 +205,7 @@ async function submit() {
         </div>
 
         <template v-else>
-          <div
+          <button
             v-for="v in visibleNodes"
             :key="v.node.uuid"
             type="button"
@@ -213,19 +222,26 @@ async function submit() {
             <button
               v-if="v.node.type === 'folder'"
               type="button"
-              :aria-label="expanded.has(v.node.uuid) ? 'Collapse' : 'Expand'"
+              :aria-label="expanded.has(v.node.uuid) ? t('common.collapse') : t('common.expand')"
               @click.stop="toggle(v.node)"
               class="mr-1 shrink-0 opacity-60 hover:opacity-100"
             >
               <ChevronRight
-                :class="expanded.has(v.node.uuid) ? 'rotate-90' : ''"
+                :class="expanded.has(v.node.uuid) ? 'rotate-190' : ''"
                 class="h-4 w-4 transition-transform"
               />
               <Loader2 v-if="loadingNodes.has(v.node.uuid)" class="h-3 w-3 animate-spin" />
             </button>
             <Folder v-if="v.node.type === 'folder'" class="h-4 w-4 shrink-0" />
             <span class="truncate">{{ v.node.name }}</span>
-          </div>
+          </button>
+
+          <p
+            v-show="visibleNodes.length === 0"
+            class="px-2 py-2 text-sm text-muted-foreground"
+          >
+            {{ t('drive.move_empty') }}
+          </p>
         </template>
       </div>
 
