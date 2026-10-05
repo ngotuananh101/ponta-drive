@@ -7,6 +7,7 @@ import { storeToRefs } from 'pinia'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
+import { useDriveActionsStore } from '@/stores/driveActions'
 import type { CloudAccount } from '@/api/cloudAccounts'
 import { humanizeBytes } from '@/lib/format'
 import { useCloudSync } from '@/composables/useCloudSync'
@@ -55,6 +56,7 @@ const router = useRouter()
 const route = useRoute()
 
 const cloudStore = useCloudAccountsStore()
+const driveActions = useDriveActionsStore()
 const { accounts: cloudAccounts, loading: cloudLoading, error: cloudError } = storeToRefs(cloudStore)
 const { sync } = useCloudSync()
 
@@ -224,16 +226,25 @@ async function handleLogout() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" class="w-56 p-1.5 shadow-xl border-border">
-            <DropdownMenuItem class="cursor-pointer py-2.5 px-3 gap-3 rounded-lg text-sm">
+            <DropdownMenuItem
+              class="cursor-pointer py-2.5 px-3 gap-3 rounded-lg text-sm"
+              @click="driveActions.request('new-folder')"
+            >
               <FolderPlus class="h-4 w-4 text-amber-500" />
               <span>{{ t('drive.new_folder') }}</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem class="cursor-pointer py-2.5 px-3 gap-3 rounded-lg text-sm">
+            <DropdownMenuItem
+              class="cursor-pointer py-2.5 px-3 gap-3 rounded-lg text-sm"
+              @click="driveActions.request('upload-file')"
+            >
               <Upload class="h-4 w-4 text-blue-500" />
               <span>{{ t('drive.upload_file') }}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem class="cursor-pointer py-2.5 px-3 gap-3 rounded-lg text-sm">
+            <DropdownMenuItem
+              class="cursor-pointer py-2.5 px-3 gap-3 rounded-lg text-sm"
+              @click="driveActions.request('upload-folder')"
+            >
               <FolderUp class="h-4 w-4 text-emerald-500" />
               <span>{{ t('drive.upload_folder') }}</span>
             </DropdownMenuItem>

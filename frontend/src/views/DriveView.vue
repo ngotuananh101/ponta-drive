@@ -5,11 +5,17 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 import { useDriveItemsStore } from '@/stores/driveItems'
+import { useDriveActionsStore } from '@/stores/driveActions'
 import { storeToRefs } from 'pinia'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import { Button } from '@/components/ui/button'
 import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
 import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
+import NewFolderDialog from '@/components/drive/NewFolderDialog.vue'
+import RenameDialog from '@/components/drive/RenameDialog.vue'
+import DeleteDriveItemDialog from '@/components/drive/DeleteDriveItemDialog.vue'
+import UploadDialog from '@/components/drive/UploadDialog.vue'
+import DriveItemMenu from '@/components/drive/DriveItemMenu.vue'
 import { useDriveItems } from '@/composables/useDriveItems'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { driveLocation } from '@/router/drivePaths'
@@ -22,22 +28,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  MoreVertical,
   ChevronDown,
   List,
   LayoutGrid,
   Info,
   ArrowDown,
-  Download,
-  Share2,
-  Trash2,
-  Star,
-  Edit2,
   FolderPlus,
   Upload,
   FolderOpen,
   Loader2,
 } from 'lucide-vue-next'
+import type { DriveItem } from '@/api/driveItems'
 
 const props = defineProps<{
   cloudUuid: string
@@ -62,6 +63,7 @@ const search = ref('')
 const sort = ref('name')
 const order = ref('asc')
 
+const driveActions = useDriveActionsStore()
 const driveStore = useDriveItemsStore()
 const { breadcrumb } = storeToRefs(driveStore)
 
@@ -183,6 +185,40 @@ function formatSize(bytes: number): string {
   // tsc 6.0.3 and this project's flags.)
   return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`
 }
+
+const isNewFolderOpen = ref(false)
+const isRenameOpen = ref(false)
+const isDeleteOpen = ref(false)
+const isUploadOpen = ref(false)
+const uploadInitialMode = ref<'file' | 'folder'>('file')
+const activeItem = ref<DriveItem | null>(null)
+
+watch(
+  () => driveActions.pending,
+  (pending) => {
+    if (!pending) return
+    if (pending.type === 'new-folder') {
+      isNewFolderOpen.value = true
+    } else if (pending.type === 'upload-file') {
+      uploadInitialMode.value = 'file'
+      isUploadOpen.value = true
+    } else if (pending.type === 'upload-folder') {
+      uploadInitialMode.value = 'folder'
+      isUploadOpen.value = true
+    }
+    driveActions.consume()
+  },
+)
+
+function openRename(item: DriveItem) {
+  activeItem.value = item
+  isRenameOpen.value = true
+}
+
+function openDelete(item: DriveItem) {
+  activeItem.value = item
+  isDeleteOpen.value = true
+}
 </script>
 
 <template>
@@ -202,12 +238,18 @@ function formatSize(bytes: number): string {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" class="w-56 p-1.5 shadow-xl border-border">
-            <DropdownMenuItem class="cursor-pointer py-2 px-3 gap-2.5 text-sm">
+            <DropdownMenuItem
+              class="cursor-pointer py-2 px-3 gap-2.5 text-sm"
+              @click="isNewFolderOpen = true"
+            >
               <FolderPlus class="h-4 w-4 text-amber-500" />
               <span>{{ t('drive.new_folder') }}</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem class="cursor-pointer py-2 px-3 gap-2.5 text-sm">
+            <DropdownMenuItem
+              class="cursor-pointer py-2 px-3 gap-2.5 text-sm"
+              @click="uploadInitialMode = 'file'; isUploadOpen = true"
+            >
               <Upload class="h-4 w-4 text-blue-500" />
               <span>{{ t('drive.upload_file') }}</span>
             </DropdownMenuItem>
@@ -355,42 +397,7 @@ function formatSize(bytes: number): string {
                     {{ formatSize(item.size) }}
                   </span>
 
-                  <!-- Row Actions Dropdown -->
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-                        @click.stop
-                      >
-                        <MoreVertical class="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-48 p-1.5 shadow-xl border-border">
-                      <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm">
-                        <Download class="h-4 w-4" />
-                        <span>{{ t('drive.action_download') }}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm">
-                        <Share2 class="h-4 w-4" />
-                        <span>{{ t('drive.action_share') }}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm">
-                        <Star class="h-4 w-4" />
-                        <span>{{ t('drive.action_star') }}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm">
-                        <Edit2 class="h-4 w-4" />
-                        <span>{{ t('drive.action_rename') }}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem class="cursor-pointer text-destructive focus:text-destructive py-2 gap-2 text-sm">
-                        <Trash2 class="h-4 w-4" />
-                        <span>{{ t('drive.action_delete') }}</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <DriveItemMenu :item="item" @rename="openRename" @delete="openDelete" />
                 </div>
               </div>
 
@@ -437,14 +444,7 @@ function formatSize(bytes: number): string {
                     <DriveItemIcon :item="item" />
                     <span class="text-sm font-medium text-foreground truncate">{{ item.name }}</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    @click.stop
-                  >
-                    <MoreVertical class="h-4 w-4 text-muted-foreground" />
-                  </Button>
+                  <DriveItemMenu :item="item" @rename="openRename" @delete="openDelete" />
                 </div>
               </div>
             </div>
@@ -470,14 +470,7 @@ function formatSize(bytes: number): string {
                       <p class="text-xs font-medium text-foreground truncate">{{ item.name }}</p>
                       <p class="text-[11px] text-muted-foreground">{{ formatSize(item.size) }} • {{ formatDate(item.updated_at) }}</p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      @click.stop
-                    >
-                      <MoreVertical class="h-4 w-4 text-muted-foreground" />
-                    </Button>
+                    <DriveItemMenu :item="item" @rename="openRename" @delete="openDelete" />
                   </div>
                 </div>
               </div>
@@ -554,5 +547,25 @@ function formatSize(bytes: number): string {
         </aside>
       </div>
     </div>
+
+    <NewFolderDialog
+      v-model:open="isNewFolderOpen"
+      :cloud-account-uuid="cloudAccountUuid"
+      :parent-uuid="parentUuid"
+    />
+    <RenameDialog
+      v-model:open="isRenameOpen"
+      :item="activeItem"
+    />
+    <DeleteDriveItemDialog
+      v-model:open="isDeleteOpen"
+      :item="activeItem"
+    />
+    <UploadDialog
+      v-model:open="isUploadOpen"
+      :cloud-account-uuid="cloudAccountUuid"
+      :parent-uuid="parentUuid"
+      :initial-mode="uploadInitialMode"
+    />
   </DashboardLayout>
 </template>
