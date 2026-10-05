@@ -26,10 +26,13 @@ function folder(uuid: string, name = uuid): DriveItem {
   return { ...testItem, uuid, name, type: 'folder' }
 }
 
-function mountDialog(item: DriveItem | null = testItem) {
+function mountDialog(
+  item: DriveItem | null = testItem,
+  parentUuid: string | null = null,
+) {
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
   return mount(MoveDialog, {
-    props: { open: true, item },
+    props: { open: true, item, parentUuid },
     global: { plugins: [i18n] },
     attachTo: document.body,
   })
@@ -111,8 +114,13 @@ describe('MoveDialog', () => {
     const store = useDriveItemsStore()
     vi.spyOn(store, 'move').mockRejectedValue(new Error('Failed to fetch'))
 
-    mountDialog()
+    const wrapper = mountDialog(testItem, 'other-folder')
     await vi.waitFor(() => expect(document.body.textContent).toContain('Projects'))
+    const row = [...document.querySelectorAll('[data-testid="move-node"]')].find(
+      (el) => el.textContent === 'Projects',
+    ) as HTMLElement
+    row.click()
+    await wrapper.vm.$nextTick()
     clickButton(viLocale.drive.move_here)
 
     await vi.waitFor(() =>
@@ -132,12 +140,74 @@ describe('MoveDialog', () => {
       new ApiError('Không thể cập nhật mục. Vui lòng thử lại.', 400),
     )
 
-    mountDialog()
+    const wrapper = mountDialog(testItem, 'other-folder')
     await vi.waitFor(() => expect(document.body.textContent).toContain('Projects'))
+    const row = [...document.querySelectorAll('[data-testid="move-node"]')].find(
+      (el) => el.textContent === 'Projects',
+    ) as HTMLElement
+    row.click()
+    await wrapper.vm.$nextTick()
     clickButton(viLocale.drive.move_here)
 
     await vi.waitFor(() =>
       expect(document.body.textContent).toContain('Không thể cập nhật mục. Vui lòng thử lại.'),
+    )
+  })
+
+  it('does not call store.move or emit moved on a no-op move to root', async () => {
+    vi.spyOn(api, 'listDriveItems').mockResolvedValue({
+      status: 'ok',
+      data: [folder('f-1', 'Projects')],
+      meta: { has_more: false, next_cursor: '' },
+    })
+    const store = useDriveItemsStore()
+    const moveSpy = vi.spyOn(store, 'move').mockResolvedValue(testItem)
+
+    // item is already at root (parentUuid === null), nothing selected -> target === null
+    const wrapper = mountDialog(testItem, null)
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Projects'))
+
+    clickButton(viLocale.drive.move_here)
+    await vi.waitFor(() => expect(moveSpy).not.toHaveBeenCalled())
+    expect(wrapper.emitted('moved')).toBeFalsy()
+    // dialog should have closed via the short-circuit
+    expect(wrapper.props('open')).toBe(true)
+  })
+
+  it('does not call store.move or emit moved on a no-op move to the current parent folder', async () => {
+    const currentParent = folder('f-1', 'Projects')
+    vi.spyOn(api, 'listDriveItems').mockResolvedValue({
+      status: 'ok',
+      data: [currentParent],
+      meta: { has_more: false, next_cursor: '' },
+    })
+    const store = useDriveItemsStore()
+    const moveSpy = vi.spyOn(store, 'move').mockResolvedValue(testItem)
+
+    const wrapper = mountDialog(testItem, currentParent.uuid)
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Projects'))
+
+    const row = [...document.querySelectorAll('[data-testid="move-node"]')].find(
+      (el) => el.textContent === 'Projects',
+    ) as HTMLElement
+    row.click()
+    await wrapper.vm.$nextTick()
+
+    clickButton(viLocale.drive.move_here)
+    await vi.waitFor(() => expect(moveSpy).not.toHaveBeenCalled())
+    expect(wrapper.emitted('moved')).toBeFalsy()
+  })
+
+  it('renders the move_empty message when the tree has no folders', async () => {
+    vi.spyOn(api, 'listDriveItems').mockResolvedValue({
+      status: 'ok',
+      data: [],
+      meta: { has_more: false, next_cursor: '' },
+    })
+
+    mountDialog()
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(viLocale.drive.move_empty),
     )
   })
 })
