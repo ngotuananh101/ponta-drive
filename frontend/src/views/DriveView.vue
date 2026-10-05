@@ -14,6 +14,7 @@ import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
 import NewFolderDialog from '@/components/drive/NewFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import DeleteDriveItemDialog from '@/components/drive/DeleteDriveItemDialog.vue'
+import MoveDialog from '@/components/drive/MoveDialog.vue'
 import UploadDialog from '@/components/drive/UploadDialog.vue'
 import DriveItemMenu from '@/components/drive/DriveItemMenu.vue'
 import { useDriveItems } from '@/composables/useDriveItems'
@@ -189,6 +190,7 @@ function formatSize(bytes: number): string {
 const isNewFolderOpen = ref(false)
 const isRenameOpen = ref(false)
 const isDeleteOpen = ref(false)
+const isMoveOpen = ref(false)
 const isUploadOpen = ref(false)
 const uploadInitialMode = ref<'file' | 'folder'>('file')
 const activeItem = ref<DriveItem | null>(null)
@@ -218,6 +220,11 @@ function openRename(item: DriveItem) {
 function openDelete(item: DriveItem) {
   activeItem.value = item
   isDeleteOpen.value = true
+}
+
+function openMove(item: DriveItem) {
+  activeItem.value = item
+  isMoveOpen.value = true
 }
 </script>
 
@@ -397,7 +404,7 @@ function openDelete(item: DriveItem) {
                     {{ formatSize(item.size) }}
                   </span>
 
-                  <DriveItemMenu :item="item" @rename="openRename" @delete="openDelete" />
+                  <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" />
                 </div>
               </div>
 
@@ -444,7 +451,7 @@ function openDelete(item: DriveItem) {
                     <DriveItemIcon :item="item" />
                     <span class="text-sm font-medium text-foreground truncate">{{ item.name }}</span>
                   </div>
-                  <DriveItemMenu :item="item" @rename="openRename" @delete="openDelete" />
+                  <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" />
                 </div>
               </div>
             </div>
@@ -470,7 +477,7 @@ function openDelete(item: DriveItem) {
                       <p class="text-xs font-medium text-foreground truncate">{{ item.name }}</p>
                       <p class="text-[11px] text-muted-foreground">{{ formatSize(item.size) }} • {{ formatDate(item.updated_at) }}</p>
                     </div>
-                    <DriveItemMenu :item="item" @rename="openRename" @delete="openDelete" />
+                    <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" />
                   </div>
                 </div>
               </div>
@@ -561,6 +568,7 @@ function openDelete(item: DriveItem) {
       v-model:open="isDeleteOpen"
       :item="activeItem"
     />
+    <MoveDialog v-model:open="isMoveOpen" :item="activeItem" />
     <UploadDialog
       v-model:open="isUploadOpen"
       :cloud-account-uuid="cloudAccountUuid"

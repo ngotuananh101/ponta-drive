@@ -60,6 +60,7 @@ describe('DriveItemMenu', () => {
     expect(text).toContain(viLocale.drive.action_download)
     expect(text).toContain(viLocale.drive.action_star)
     expect(text).toContain(viLocale.drive.action_rename)
+    expect(text).toContain(viLocale.drive.action_move)
     expect(text).toContain(viLocale.drive.action_delete)
   })
 
@@ -80,5 +81,10 @@ describe('DriveItemMenu', () => {
   it('emits delete event when delete is clicked', async () => {
     const wrapper = await clickMenuItem(viLocale.drive.action_delete)
     expect(wrapper.emitted('delete')?.[0]?.[0]).toEqual(testItem)
+  })
+
+  it('emits move event when move is clicked', async () => {
+    const wrapper = await clickMenuItem(viLocale.drive.action_move)
+    expect(wrapper.emitted('move')?.[0]?.[0]).toEqual(testItem)
   })
 })
