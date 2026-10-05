@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import DeleteDriveItemDialog from '../DeleteDriveItemDialog.vue'
+import { ApiError } from '@/api/client'
 import { useDriveItemsStore } from '@/stores/driveItems'
 import type { DriveItem } from '@/api/driveItems'
 import viLocale from '@/locales/vi.json'
@@ -68,5 +69,40 @@ describe('DeleteDriveItemDialog', () => {
 
     await vi.waitFor(() => expect(deleteSpy).toHaveBeenCalledWith('f-1', true))
     expect(wrapper.emitted('deleted')).toBeTruthy()
+  })
+
+  it('renders the localized action_failed message for a non-ApiError rejection', async () => {
+    const store = useDriveItemsStore()
+    vi.spyOn(store, 'remove').mockRejectedValue(new Error('Failed to fetch'))
+
+    mountDialog(testFile)
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.delete_item_title))
+
+    const button = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(viLocale.drive.delete_button),
+    )!
+    button.click()
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(viLocale.drive.action_failed),
+    )
+    expect(document.body.textContent).not.toContain('Failed to fetch')
+  })
+
+  it('renders the backend message when the failure is an ApiError', async () => {
+    const store = useDriveItemsStore()
+    vi.spyOn(store, 'remove').mockRejectedValue(new ApiError('Không thể xóa mục. Vui lòng thử lại.', 400))
+
+    mountDialog(testFile)
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.delete_item_title))
+
+    const button = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(viLocale.drive.delete_button),
+    )!
+    button.click()
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('Không thể xóa mục. Vui lòng thử lại.'),
+    )
   })
 })
