@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Upload,
@@ -50,10 +50,16 @@ const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const folderInput = ref<HTMLInputElement | null>(null)
 
-watch(open, (isOpen) => {
+watch(open, async (isOpen) => {
   if (isOpen) {
     selectedFiles.value = []
     clearQueue()
+    // When opening in "folder" mode, auto-launch the folder picker so the
+    // user can pick a directory tree without an extra click.
+    if (props.initialMode === 'folder') {
+      await nextTick()
+      folderInput.value?.click()
+    }
   }
 })
 
