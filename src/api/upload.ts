@@ -118,6 +118,70 @@ function normalizeUploadOptions(options?: UploadOptionsParameter): XhrUploadOpti
   return options ?? {}
 }
 
+interface XhrUploadSpec {
+  method: string
+  url: string
+  headers: Record<string, string>
+  body: Blob | FormData
+  onProgress?: ProgressCallback
+  signal?: AbortSignal
+  statusError: (status: number) => string
+  networkError: string
+}
+
+function sendUploadRequest(spec: XhrUploadSpec): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(spec.method, spec.url, true)
+
+    for (const [k, v] of Object.entries(spec.headers)) {
+      xhr.setRequestHeader(k, v)
+    }
+
+    if (spec.onProgress) {
+      const onProgress = spec.onProgress
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100), e.loaded, e.total)
+        }
+      }
+    }
+
+    const onAbort = () => {
+      xhr.abort()
+      spec.signal?.removeEventListener('abort', onAbort)
+    }
+
+    xhr.onload = () => {
+      spec.signal?.removeEventListener('abort', onAbort)
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        reject(new Error(spec.statusError(xhr.status)))
+      }
+    }
+
+    xhr.onerror = () => {
+      spec.signal?.removeEventListener('abort', onAbort)
+      reject(new Error(spec.networkError))
+    }
+
+    xhr.onabort = () => {
+      spec.signal?.removeEventListener('abort', onAbort)
+      reject(new DOMException('Upload aborted', 'AbortError'))
+    }
+
+    if (spec.signal?.aborted) {
+      xhr.abort()
+      return
+    }
+
+    spec.signal?.addEventListener('abort', onAbort, { once: true })
+
+    xhr.send(spec.body)
+  })
+}
+
 /**
  * Uploads a file directly to S3 via presigned PUT using XMLHttpRequest for progress events.
  */
@@ -129,66 +193,15 @@ export function uploadDirectToS3(
   options?: UploadOptionsParameter,
 ): Promise<void> {
   const opts = normalizeUploadOptions(options)
-
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open(method || 'PUT', url, true)
-
-    for (const [k, v] of Object.entries(headers)) {
-      xhr.setRequestHeader(k, v)
-    }
-
-    if (opts.onProgress) {
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100)
-          opts.onProgress?.(percent, e.loaded, e.total)
-        }
-      }
-    }
-
-    const onAbort = () => {
-      xhr.abort()
-      if (opts.signal) {
-        opts.signal.removeEventListener('abort', onAbort)
-      }
-    }
-
-    xhr.onload = () => {
-      if (opts.signal) {
-        opts.signal.removeEventListener('abort', onAbort)
-      }
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve()
-      } else {
-        reject(new Error(`Direct S3 upload failed with status ${xhr.status}`))
-      }
-    }
-
-    xhr.onerror = () => {
-      if (opts.signal) {
-        opts.signal.removeEventListener('abort', onAbort)
-      }
-      reject(new Error('Network error during direct S3 upload'))
-    }
-
-    xhr.onabort = () => {
-      if (opts.signal) {
-        opts.signal.removeEventListener('abort', onAbort)
-      }
-      reject(new DOMException('Upload aborted', 'AbortError'))
-    }
-
-    if (opts.signal?.aborted) {
-      xhr.abort()
-      return
-    }
-
-    if (opts.signal) {
-      opts.signal.addEventListener('abort', onAbort, { once: true })
-    }
-
-    xhr.send(file)
+  return sendUploadRequest({
+    method: method || 'PUT',
+    url,
+    headers,
+    body: file,
+    onProgress: opts.onProgress,
+    signal: opts.signal,
+    statusError: (status) => `Direct S3 upload failed with status ${status}`,
+    networkError: 'Network error during direct S3 upload',
   })
 }
 
@@ -202,74 +215,26 @@ export function uploadMultipartChunk(
   options?: UploadOptionsParameter,
 ): Promise<void> {
   const opts = normalizeUploadOptions(options)
+  const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+  const url = `${API_BASE_URL}/v1/drive/upload/multipart/part`
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  const token = localStorage.getItem('token')
+  if (token) headers['Authorization'] = `Bearer ${token}`
 
-  return new Promise((resolve, reject) => {
-    const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
-    const url = `${API_BASE_URL}/v1/drive/upload/multipart/part`
+  const formData = new FormData()
+  formData.append('session_id', sessionId)
+  formData.append('part_number', String(partNumber))
+  formData.append('file', chunk)
 
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', url, true)
-
-    const token = localStorage.getItem('token')
-    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-    xhr.setRequestHeader('Accept', 'application/json')
-
-    const formData = new FormData()
-    formData.append('session_id', sessionId)
-    formData.append('part_number', String(partNumber))
-    formData.append('file', chunk)
-
-    if (opts.onProgress) {
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100)
-          opts.onProgress?.(percent, e.loaded, e.total)
-        }
-      }
-    }
-
-    const onAbort = () => {
-      xhr.abort()
-      if (opts.signal) {
-        opts.signal.removeEventListener('abort', onAbort)
-      }
-    }
-
-    xhr.onload = () => {
-      if (opts.signal) {
-        opts.signal.removeEventListener('abort', onAbort)
-      }
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve()
-      } else {
-        reject(new Error(`Part upload failed with status ${xhr.status}`))
-      }
-    }
-
-    xhr.onerror = () => {
-      if (opts.signal) {
-        opts.signal.removeEventListener('abort', onAbort)
-      }
-      reject(new Error('Network error during multipart part upload'))
-    }
-
-    xhr.onabort = () => {
-      if (opts.signal) {
-        opts.signal.removeEventListener('abort', onAbort)
-      }
-      reject(new DOMException('Upload aborted', 'AbortError'))
-    }
-
-    if (opts.signal?.aborted) {
-      xhr.abort()
-      return
-    }
-
-    if (opts.signal) {
-      opts.signal.addEventListener('abort', onAbort, { once: true })
-    }
-
-    xhr.send(formData)
+  return sendUploadRequest({
+    method: 'POST',
+    url,
+    headers,
+    body: formData,
+    onProgress: opts.onProgress,
+    signal: opts.signal,
+    statusError: (status) => `Part upload failed with status ${status}`,
+    networkError: 'Network error during multipart part upload',
   })
 }
 

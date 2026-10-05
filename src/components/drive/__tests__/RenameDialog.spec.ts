@@ -30,6 +30,17 @@ function mountDialog(item: DriveItem | null) {
   })
 }
 
+async function fillAndSubmit(wrapper: ReturnType<typeof mountDialog>, name: string) {
+  const input = document.querySelector<HTMLInputElement>('input')!
+  input.value = name
+  input.dispatchEvent(new Event('input'))
+  await wrapper.vm.$nextTick()
+  const button = [...document.querySelectorAll('button')].find((b) =>
+    b.textContent?.includes(viLocale.drive.rename_save),
+  )!
+  button.click()
+}
+
 describe('RenameDialog', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -54,15 +65,7 @@ describe('RenameDialog', () => {
     const wrapper = mountDialog(testItem)
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.rename_title))
 
-    const input = document.querySelector<HTMLInputElement>('input')!
-    input.value = 'New Name.pdf'
-    input.dispatchEvent(new Event('input'))
-    await wrapper.vm.$nextTick()
-
-    const button = [...document.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes(viLocale.drive.rename_save),
-    )!
-    button.click()
+    await fillAndSubmit(wrapper, 'New Name.pdf')
 
     await vi.waitFor(() => expect(renameSpy).toHaveBeenCalledWith('item-1', 'New Name.pdf'))
     expect(wrapper.emitted('renamed')?.[0]?.[0]).toEqual({ ...testItem, name: 'New Name.pdf' })
@@ -86,15 +89,7 @@ describe('RenameDialog', () => {
     const wrapper = mountDialog(testItem)
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.rename_title))
 
-    const input = document.querySelector<HTMLInputElement>('input')!
-    input.value = 'New Name.pdf'
-    input.dispatchEvent(new Event('input'))
-    await wrapper.vm.$nextTick()
-
-    const button = [...document.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes(viLocale.drive.rename_save),
-    )!
-    button.click()
+    await fillAndSubmit(wrapper, 'New Name.pdf')
 
     await vi.waitFor(() =>
       expect(document.body.textContent).toContain(viLocale.drive.action_failed),
@@ -109,15 +104,7 @@ describe('RenameDialog', () => {
     const wrapper = mountDialog(testItem)
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.rename_title))
 
-    const input = document.querySelector<HTMLInputElement>('input')!
-    input.value = 'New Name.pdf'
-    input.dispatchEvent(new Event('input'))
-    await wrapper.vm.$nextTick()
-
-    const button = [...document.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes(viLocale.drive.rename_save),
-    )!
-    button.click()
+    await fillAndSubmit(wrapper, 'New Name.pdf')
 
     await vi.waitFor(() => expect(document.body.textContent).toContain('Tên đã tồn tại'))
   })
