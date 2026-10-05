@@ -119,6 +119,7 @@ function close() {
           type="file"
           multiple
           class="hidden"
+          :aria-label="t('drive.upload_select_files')"
           @change="handleFileSelect"
         />
         <input
@@ -128,14 +129,15 @@ function close() {
           directory
           multiple
           class="hidden"
+          :aria-label="t('drive.upload_select_folder')"
           @change="handleFileSelect"
         />
 
         <!-- Method Selection Step -->
         <div class="space-y-2">
-          <label class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             {{ t('drive.upload_method_title') }}
-          </label>
+          </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div
               class="border rounded-xl p-3 cursor-pointer transition-all flex flex-col gap-1.5"
@@ -144,7 +146,11 @@ function close() {
                   ? 'border-primary bg-primary/5 ring-1 ring-primary'
                   : 'border-border hover:bg-muted/40',
               ]"
+              role="button"
+              tabindex="0"
               @click="uploadMethod = 'direct'"
+              @keydown.enter="uploadMethod = 'direct'"
+              @keydown.space.prevent="uploadMethod = 'direct'"
             >
               <div class="flex items-center gap-2">
                 <HardDrive class="h-4 w-4 text-primary" />
@@ -162,7 +168,11 @@ function close() {
                   ? 'border-primary bg-primary/5 ring-1 ring-primary'
                   : 'border-border hover:bg-muted/40',
               ]"
+              role="button"
+              tabindex="0"
               @click="uploadMethod = 'server'"
+              @keydown.enter="uploadMethod = 'server'"
+              @keydown.space.prevent="uploadMethod = 'server'"
             >
               <div class="flex items-center gap-2">
                 <Server class="h-4 w-4 text-emerald-500" />

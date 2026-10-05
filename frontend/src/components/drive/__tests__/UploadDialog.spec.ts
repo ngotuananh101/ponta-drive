@@ -7,6 +7,20 @@ import UploadDialog from '../UploadDialog.vue'
 import * as useUploadModule from '@/composables/useUpload'
 import viLocale from '@/locales/vi.json'
 
+type UseUploadReturn = ReturnType<typeof useUploadModule.useUpload>
+
+function mockUseUpload(startUploadMock: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue([])) {
+  const mock: UseUploadReturn = {
+    uploadQueue: ref([]),
+    isUploading: ref(false),
+    startUpload: startUploadMock,
+    cancelItem: vi.fn(),
+    clearQueue: vi.fn(),
+  }
+  vi.spyOn(useUploadModule, 'useUpload').mockReturnValue(mock)
+  return mock
+}
+
 function mountDialog(initialMode: 'file' | 'folder' = 'file') {
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
   return mount(UploadDialog, {
@@ -14,6 +28,30 @@ function mountDialog(initialMode: 'file' | 'folder' = 'file') {
     global: { plugins: [i18n] },
     attachTo: document.body,
   })
+}
+
+function mountClosedDialog(initialMode: 'file' | 'folder' = 'file') {
+  const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
+  return mount(UploadDialog, {
+    props: { open: false, cloudAccountUuid: 'cloud-1', parentUuid: null, initialMode },
+    global: { plugins: [i18n] },
+    attachTo: document.body,
+  })
+}
+
+async function selectFile(name = 'sample.txt') {
+  const file = new File(['content'], name, { type: 'text/plain' })
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')
+  Object.defineProperty(input, 'files', { value: [file] })
+  await input.dispatchEvent(new Event('change'))
+  return file
+}
+
+function clickButton(label: string) {
+  const button = [...document.querySelectorAll('button')].find((b) =>
+    b.textContent?.includes(label),
+  )!
+  button.click()
 }
 
 describe('UploadDialog', () => {
@@ -31,30 +69,16 @@ describe('UploadDialog', () => {
   })
 
   it('selects files and calls startUpload on submit', async () => {
-    const startUploadMock = vi.fn().mockResolvedValue([])
-    vi.spyOn(useUploadModule, 'useUpload').mockReturnValue({
-      uploadQueue: ref([]),
-      isUploading: ref(false),
-      startUpload: startUploadMock,
-      cancelItem: vi.fn(),
-      clearQueue: vi.fn(),
-    })
+    const { startUpload } = mockUseUpload()
 
     mountDialog('file')
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
 
-    const file = new File(['content'], 'sample.txt', { type: 'text/plain' })
-    const input = document.querySelector<HTMLInputElement>('input[type="file"]')
-    Object.defineProperty(input, 'files', { value: [file] })
-    await input.dispatchEvent(new Event('change'))
-
-    const startBtn = [...document.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes(viLocale.drive.upload_start),
-    )!
-    startBtn.click()
+    const file = await selectFile()
+    clickButton(viLocale.drive.upload_start)
 
     await vi.waitFor(() =>
-      expect(startUploadMock).toHaveBeenCalledWith(
+      expect(startUpload).toHaveBeenCalledWith(
         expect.objectContaining({
           cloudAccountUuid: 'cloud-1',
           files: [file],
@@ -65,22 +89,12 @@ describe('UploadDialog', () => {
   })
 
   it('selects server method card and threads it into startUpload', async () => {
-    const startUploadMock = vi.fn().mockResolvedValue([])
-    vi.spyOn(useUploadModule, 'useUpload').mockReturnValue({
-      uploadQueue: ref([]),
-      isUploading: ref(false),
-      startUpload: startUploadMock,
-      cancelItem: vi.fn(),
-      clearQueue: vi.fn(),
-    })
+    const { startUpload } = mockUseUpload()
 
     mountDialog('file')
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
 
-    const file = new File(['content'], 'sample.txt', { type: 'text/plain' })
-    const input = document.querySelector<HTMLInputElement>('input[type="file"]')
-    Object.defineProperty(input, 'files', { value: [file] })
-    await input.dispatchEvent(new Event('change'))
+    const file = await selectFile()
 
     const serverCard = [...document.querySelectorAll<HTMLDivElement>('div')].find(
       (el) =>
@@ -89,13 +103,10 @@ describe('UploadDialog', () => {
     )!
     serverCard.click()
 
-    const startBtn = [...document.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes(viLocale.drive.upload_start),
-    )!
-    startBtn.click()
+    clickButton(viLocale.drive.upload_start)
 
     await vi.waitFor(() =>
-      expect(startUploadMock).toHaveBeenCalledWith(
+      expect(startUpload).toHaveBeenCalledWith(
         expect.objectContaining({
           cloudAccountUuid: 'cloud-1',
           files: [file],
@@ -106,22 +117,10 @@ describe('UploadDialog', () => {
   })
 
   it('auto-opens the folder picker when initialMode is "folder"', async () => {
-    const startUploadMock = vi.fn().mockResolvedValue([])
-    vi.spyOn(useUploadModule, 'useUpload').mockReturnValue({
-      uploadQueue: ref([]),
-      isUploading: ref(false),
-      startUpload: startUploadMock,
-      cancelItem: vi.fn(),
-      clearQueue: vi.fn(),
-    })
-
+    mockUseUpload()
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click')
 
-    const wrapper = mount(UploadDialog, {
-      props: { open: false, cloudAccountUuid: 'cloud-1', parentUuid: null, initialMode: 'folder' },
-      global: { plugins: [createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })] },
-      attachTo: document.body,
-    })
+    const wrapper = mountClosedDialog('folder')
 
     // Toggle open to trigger the watch (Vue watch does not fire for the initial value).
     await wrapper.setProps({ open: true })
@@ -132,22 +131,10 @@ describe('UploadDialog', () => {
   })
 
   it('does NOT auto-open the folder picker when initialMode is "file"', async () => {
-    const startUploadMock = vi.fn().mockResolvedValue([])
-    vi.spyOn(useUploadModule, 'useUpload').mockReturnValue({
-      uploadQueue: ref([]),
-      isUploading: ref(false),
-      startUpload: startUploadMock,
-      cancelItem: vi.fn(),
-      clearQueue: vi.fn(),
-    })
-
+    mockUseUpload()
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click')
 
-    const wrapper = mount(UploadDialog, {
-      props: { open: false, cloudAccountUuid: 'cloud-1', parentUuid: null, initialMode: 'file' },
-      global: { plugins: [createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })] },
-      attachTo: document.body,
-    })
+    const wrapper = mountClosedDialog('file')
 
     // Toggle open to trigger the watch (Vue watch does not fire for the initial value).
     await wrapper.setProps({ open: true })
