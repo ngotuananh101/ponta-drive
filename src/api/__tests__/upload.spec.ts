@@ -72,11 +72,30 @@ describe('upload API endpoints', () => {
   })
 })
 
+interface ProgressLike {
+  lengthComputable: boolean
+  loaded: number
+  total: number
+}
+
+interface MockXhrUpload {
+  onprogress: ((e: ProgressLike) => void) | null
+}
+
 /**
  * Creates a mock XHR instance with controllable event triggers.
  * The instance is stored in `mockXhrInstance` so the test can drive it.
  */
 let mockXhrInstance: MockXhr
+
+/**
+ * Captures the freshly constructed instance. Storing `this` on a module
+ * variable inside the constructor trips oxlint's `no-this-alias`; routing it
+ * through a free function keeps the capture explicit and lint-clean.
+ */
+function captureXhr(instance: MockXhr) {
+  mockXhrInstance = instance
+}
 
 class MockXhr {
   open = vi.fn()
@@ -96,31 +115,27 @@ class MockXhr {
   onabort: ((e: Event) => void) | null = null
 
   constructor() {
-    mockXhrInstance = this
+    captureXhr(this)
   }
 
   _triggerLoad = () => this.onload?.({} as Event)
   _triggerError = () => this.onerror?.({} as Event)
-  _triggerProgress = (e: any) => this.upload.onprogress?.(e)
+  _triggerProgress = (e: ProgressLike) => this.upload.onprogress?.(e)
   _setStatus = (s: number) => {
     this.status = s
   }
 }
 
-interface MockXhrUpload {
-  onprogress: ((e: any) => void) | null
-}
-
 describe('XHR upload helpers', () => {
-  let originalXMLHttpRequest: any
-  let originalFormData: any
+  let originalXMLHttpRequest: typeof XMLHttpRequest
+  let originalFormData: typeof FormData
 
   beforeEach(() => {
     vi.restoreAllMocks()
     originalXMLHttpRequest = globalThis.XMLHttpRequest
     originalFormData = globalThis.FormData
 
-    globalThis.XMLHttpRequest = MockXhr as any
+    globalThis.XMLHttpRequest = MockXhr as unknown as typeof XMLHttpRequest
   })
 
   afterEach(() => {
@@ -201,11 +216,15 @@ describe('XHR upload helpers', () => {
   })
 
   it('uploadMultipartChunk sends POST with FormData and resolves on 200', async () => {
-    vi.spyOn(globalThis, 'FormData').mockImplementation(function (this: any) {
+    vi.spyOn(globalThis, 'FormData').mockImplementation(function (this: {
+      entries: ReturnType<typeof vi.fn>
+      append: ReturnType<typeof vi.fn>
+      get: ReturnType<typeof vi.fn>
+    }) {
       this.entries = vi.fn().mockReturnValue([])
       this.append = vi.fn()
       this.get = vi.fn()
-    } as any)
+    } as unknown as typeof FormData)
 
     mockXhrInstance._setStatus(200)
     localStorage.setItem('token', 'test-token')
