@@ -116,6 +116,20 @@ export async function renameDriveItem(
   })
 }
 
+/**
+ * Moves an item to another folder. An empty `parent_uuid` moves it to the root,
+ * matching the backend's `req.ParentUUID != ""` check.
+ */
+export async function moveDriveItem(
+  uuid: string,
+  parentUuid: string | null,
+): Promise<ApiResponse<DriveItem>> {
+  return fetchApi<ApiResponse<DriveItem>>(`/v1/drive/items/${encodeURIComponent(uuid)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ parent_uuid: parentUuid ?? '' }),
+  })
+}
+
 export async function deleteDriveItem(
   uuid: string,
   permanent = true,
