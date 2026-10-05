@@ -235,6 +235,27 @@ describe('driveItems store', () => {
     expect(store.error).toBe(null)
   })
 
+  it('move removes the item from the current listing', async () => {
+    vi.spyOn(api, 'listDriveItems').mockResolvedValue({
+      status: 'ok',
+      data: [item('a'), item('b')],
+      meta: { has_more: false, next_cursor: '' },
+    })
+    const moveSpy = vi.spyOn(api, 'moveDriveItem').mockResolvedValue({
+      status: 'ok',
+      data: item('a'),
+    })
+
+    const store = useDriveItemsStore()
+    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid' })
+
+    const moved = await store.move('a', 'dest-uuid')
+
+    expect(moveSpy).toHaveBeenCalledWith('a', 'dest-uuid')
+    expect(moved.uuid).toBe('a')
+    expect(store.items.map((i) => i.uuid)).toEqual(['b'])
+  })
+
   it('createFolder prepends the new folder to items', async () => {
     const newFolder = item('f-new', 'New Folder')
     newFolder.type = 'folder'

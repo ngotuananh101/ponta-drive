@@ -6,6 +6,7 @@ import {
   getDriveItemBreadcrumb,
   createDriveFolder,
   renameDriveItem,
+  moveDriveItem,
   deleteDriveItem,
   toggleStarDriveItem,
   type DriveItem,
@@ -135,6 +136,14 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
     return updated
   }
 
+  async function move(uuid: string, parentUuid: string | null): Promise<DriveItem> {
+    const res = await moveDriveItem(uuid, parentUuid)
+    const updated = res.data as DriveItem
+    // The item no longer belongs to the folder currently being listed.
+    items.value = items.value.filter((i) => i.uuid !== uuid)
+    return updated
+  }
+
   async function remove(uuid: string, permanent = true): Promise<void> {
     await deleteDriveItem(uuid, permanent)
     items.value = items.value.filter((i) => i.uuid !== uuid)
@@ -199,6 +208,7 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
     insertItem,
     createFolder,
     rename,
+    move,
     remove,
     toggleStar,
   }
