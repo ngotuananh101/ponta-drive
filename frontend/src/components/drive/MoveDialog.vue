@@ -192,7 +192,7 @@ async function submit() {
 
         <div v-if="loadingRoot" class="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
           <Loader2 class="h-3.5 w-3.5 animate-spin" />
-          <span>{{ t('drive.loading') }}</span>
+          <span>{{ t('common.loading') }}</span>
         </div>
 
         <template v-else>
@@ -207,7 +207,7 @@ async function submit() {
               'bg-primary/10 text-primary': selectedUuid === v.node.uuid && !isForbidden(v.node.uuid),
               'opacity-60 cursor-not-allowed': isForbidden(v.node.uuid),
             }"
-            :style="{ paddingLeft: v.depth * 1 + 'rem' }"
+            :style="{ paddingLeft: `${v.depth}rem` }"
             @click="select(v.node.uuid)"
           >
             <button
