@@ -57,7 +57,7 @@ const cloudAccountUuid = computed(() => props.cloudUuid)
 const parentUuid = computed(() => props.folderUuid ?? null)
 
 type ViewMode = 'list' | 'grid'
-const viewMode = ref<ViewMode>('list')
+const viewMode = ref<ViewMode>('grid')
 const selectedItemId = ref<string | null>(null)
 const showDetails = ref(false)
 const search = ref('')
