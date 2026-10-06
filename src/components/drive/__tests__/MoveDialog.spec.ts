@@ -77,7 +77,7 @@ describe('MoveDialog', () => {
     const wrapper = mountDialog()
     await vi.waitFor(() => expect(document.body.textContent).toContain('Projects'))
 
-    const row = [...document.querySelectorAll('*')].find(
+    const row = [...document.querySelectorAll('[data-testid="move-node"]')].find(
       (el) => el.textContent === 'Projects',
     ) as HTMLElement
     row.click()
