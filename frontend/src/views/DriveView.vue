@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 import { useDriveItemsStore } from '@/stores/driveItems'
 import { useDriveActionsStore } from '@/stores/driveActions'
+import { useDriveSearchStore } from '@/stores/driveSearch'
 import { storeToRefs } from 'pinia'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,7 @@ import UploadDialog from '@/components/drive/UploadDialog.vue'
 import DriveItemMenu from '@/components/drive/DriveItemMenu.vue'
 import { useDriveItems } from '@/composables/useDriveItems'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { usePersistedRef } from '@/composables/usePersistedRef'
 import { driveLocation } from '@/router/drivePaths'
 import { setDocumentTitle } from '@/lib/documentTitle'
 import {
@@ -57,16 +59,26 @@ const cloudAccountUuid = computed(() => props.cloudUuid)
 const parentUuid = computed(() => props.folderUuid ?? null)
 
 type ViewMode = 'list' | 'grid'
-const viewMode = ref<ViewMode>('grid')
+const isViewMode = (value: unknown): value is ViewMode => value === 'list' || value === 'grid'
+const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean'
+
+// View mode and the details panel are viewer preferences, not account data, so
+// they persist per browser and survive reloads and folder navigation.
+const viewMode = usePersistedRef<ViewMode>('ponta-drive-view-mode', 'grid', isViewMode)
+const showDetails = usePersistedRef<boolean>('ponta-drive-show-details', false, isBoolean)
 const selectedItemId = ref<string | null>(null)
-const showDetails = ref(false)
-const search = ref('')
 const sort = ref('name')
 const order = ref('asc')
 
 const driveActions = useDriveActionsStore()
+const driveSearch = useDriveSearchStore()
 const driveStore = useDriveItemsStore()
 const { breadcrumb } = storeToRefs(driveStore)
+
+// The term typed into the layout's top-bar search (desktop and mobile). It
+// lives in a store because the inputs and the list are owned by different
+// components.
+const search = computed(() => driveSearch.query)
 
 // The breadcrumb's lifecycle is owned by the folder param: a root navigation
 // fires this with an empty uuid, which clears the bar.
@@ -427,7 +439,7 @@ function openMove(item: DriveItem) {
               class="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground"
             >
               <FolderOpen class="h-8 w-8" />
-              {{ t('drive.empty_drive_title') }}
+              {{ search ? t('drive.search_no_results') : t('drive.empty_drive_title') }}
             </div>
           </div>
 
@@ -501,7 +513,7 @@ function openMove(item: DriveItem) {
               class="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground"
             >
               <FolderOpen class="h-8 w-8" />
-              {{ t('drive.empty_drive_title') }}
+              {{ search ? t('drive.search_no_results') : t('drive.empty_drive_title') }}
             </div>
           </div>
         </div>
