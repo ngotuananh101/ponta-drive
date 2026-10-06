@@ -8,6 +8,7 @@ import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { useCloudAccountsStore } from '@/stores/cloudAccounts'
 import { useDriveActionsStore } from '@/stores/driveActions'
+import { useDriveSearchStore } from '@/stores/driveSearch'
 import type { CloudAccount } from '@/api/cloudAccounts'
 import { humanizeBytes } from '@/lib/format'
 import { useCloudSync } from '@/composables/useCloudSync'
@@ -28,7 +29,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Search,
-  SlidersHorizontal,
   Plus,
   Home,
   HardDrive,
@@ -57,6 +57,7 @@ const route = useRoute()
 
 const cloudStore = useCloudAccountsStore()
 const driveActions = useDriveActionsStore()
+const driveSearch = useDriveSearchStore()
 const { accounts: cloudAccounts, loading: cloudLoading, error: cloudError } = storeToRefs(cloudStore)
 const { sync } = useCloudSync()
 
@@ -124,7 +125,6 @@ onMounted(() => {
 })
 
 const isMobileMenuOpen = ref(false)
-const searchQuery = ref('')
 const isMyDriveOpen = ref(true)
 
 const activeNav = computed(() => {
@@ -498,17 +498,20 @@ async function handleLogout() {
           <div class="relative flex items-center w-full">
             <Search class="absolute left-3.5 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
-              v-model="searchQuery"
+              v-model="driveSearch.query"
               type="text"
               :placeholder="t('drive.search_placeholder')"
               class="w-full h-10 pl-10 pr-10 rounded-full bg-muted/60 hover:bg-muted/80 focus:bg-background border border-border/70 focus:border-primary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
             />
             <button
+              v-if="driveSearch.query"
               type="button"
               class="absolute right-3 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-background/80 transition-colors"
-              :title="t('drive.sort')"
+              :title="t('drive.search_clear')"
+              :aria-label="t('drive.search_clear')"
+              @click="driveSearch.clear()"
             >
-              <SlidersHorizontal class="h-4 w-4" />
+              <X class="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -572,17 +575,20 @@ async function handleLogout() {
             <div class="relative flex items-center w-full">
               <Search class="absolute left-3.5 h-4 w-4 text-muted-foreground pointer-events-none" />
               <input
-                v-model="searchQuery"
+                v-model="driveSearch.query"
                 type="text"
                 :placeholder="t('drive.search_placeholder')"
                 class="w-full h-10 pl-10 pr-10 rounded-full bg-muted/60 hover:bg-muted/80 focus:bg-background border border-border/70 focus:border-primary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
               />
               <button
+                v-if="driveSearch.query"
                 type="button"
                 class="absolute right-3 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-background/80 transition-colors"
-                :title="t('drive.sort')"
+                :title="t('drive.search_clear')"
+                :aria-label="t('drive.search_clear')"
+                @click="driveSearch.clear()"
               >
-                <SlidersHorizontal class="h-4 w-4" />
+                <X class="h-4 w-4" />
               </button>
             </div>
           </div>
