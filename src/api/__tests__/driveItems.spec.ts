@@ -3,6 +3,7 @@ import * as client from '../client'
 import {
   createDriveFolder,
   renameDriveItem,
+  moveDriveItem,
   deleteDriveItem,
   toggleStarDriveItem,
   getDriveItemDownloadUrl,
@@ -38,6 +39,26 @@ describe('driveItems API mutations', () => {
     expect(spy).toHaveBeenCalledWith('/v1/drive/items/item-uuid', {
       method: 'PATCH',
       body: JSON.stringify({ name: 'Updated Name' }),
+    })
+  })
+
+  it('moveDriveItem patches /v1/drive/items/:uuid with parent_uuid', async () => {
+    const spy = vi.spyOn(client, 'fetchApi').mockResolvedValue({ status: 'ok' })
+    await moveDriveItem('item-uuid', 'dest-folder-uuid')
+
+    expect(spy).toHaveBeenCalledWith('/v1/drive/items/item-uuid', {
+      method: 'PATCH',
+      body: JSON.stringify({ parent_uuid: 'dest-folder-uuid' }),
+    })
+  })
+
+  it('moveDriveItem sends an empty parent_uuid when moving to root', async () => {
+    const spy = vi.spyOn(client, 'fetchApi').mockResolvedValue({ status: 'ok' })
+    await moveDriveItem('item-uuid', null)
+
+    expect(spy).toHaveBeenCalledWith('/v1/drive/items/item-uuid', {
+      method: 'PATCH',
+      body: JSON.stringify({ parent_uuid: '' }),
     })
   })
 
