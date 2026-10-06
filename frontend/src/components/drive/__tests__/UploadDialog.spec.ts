@@ -2,55 +2,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { ref } from 'vue'
 import UploadDialog from '../UploadDialog.vue'
-import * as useUploadModule from '@/composables/useUpload'
+import { useUploadStore, type UploadQueueItem } from '@/stores/upload'
 import viLocale from '@/locales/vi.json'
 
-type UseUploadReturn = ReturnType<typeof useUploadModule.useUpload>
-
-function mockUseUpload(startUploadMock: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue([])) {
-  const mock: UseUploadReturn = {
-    uploadQueue: ref([]),
-    isUploading: ref(false),
-    startUpload: startUploadMock,
-    cancelItem: vi.fn(),
-    clearQueue: vi.fn(),
-  }
-  vi.spyOn(useUploadModule, 'useUpload').mockReturnValue(mock)
-  return mock
-}
-
-function mountDialog(initialMode: 'file' | 'folder' = 'file') {
+function mountDialog(initialMode: 'file' | 'folder' = 'file', open = true) {
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
   return mount(UploadDialog, {
-    props: { open: true, cloudAccountId: 1, parentUuid: null, initialMode },
+    props: { open, cloudAccountId: 1, parentUuid: null, initialMode },
     global: { plugins: [i18n] },
     attachTo: document.body,
   })
 }
 
-function mountClosedDialog(initialMode: 'file' | 'folder' = 'file') {
-  const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
-  return mount(UploadDialog, {
-    props: { open: false, cloudAccountId: 1, parentUuid: null, initialMode },
-    global: { plugins: [i18n] },
-    attachTo: document.body,
-  })
-}
-
-async function selectFile(name = 'sample.txt') {
-  const file = new File(['content'], name, { type: 'text/plain' })
+async function selectFiles(names: string[]) {
+  const files = names.map((n) => new File(['content'], n, { type: 'text/plain' }))
   const input = document.querySelector<HTMLInputElement>('input[type="file"]')
-  Object.defineProperty(input, 'files', { value: [file] })
+  Object.defineProperty(input, 'files', { value: files })
   await input.dispatchEvent(new Event('change'))
-  return file
+  return files
 }
 
 function clickButton(label: string) {
-  const button = [...document.querySelectorAll('button')].find((b) =>
-    b.textContent?.includes(label),
-  )!
+  const button = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes(label))!
   button.click()
 }
 
@@ -68,33 +42,72 @@ describe('UploadDialog', () => {
     expect(document.body.textContent).toContain(viLocale.drive.upload_method_server)
   })
 
-  it('selects files and calls startUpload on submit', async () => {
-    const { startUpload } = mockUseUpload()
-
+  it('shows the selected file name before upload', async () => {
     mountDialog('file')
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
 
-    const file = await selectFile()
+    await selectFiles(['report.pdf'])
+
+    expect(document.body.textContent).toContain('report.pdf')
+    expect(document.body.textContent).toContain(viLocale.drive.upload_selected_title.replace('{count}', '1'))
+  })
+
+  it('removes a single selected file', async () => {
+    const wrapper = mountDialog('file')
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
+
+    await selectFiles(['a.txt', 'b.txt'])
+    expect(document.body.textContent).toContain('a.txt')
+    expect(document.body.textContent).toContain('b.txt')
+
+    const removeButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.getAttribute('aria-label') === viLocale.drive.upload_remove_file,
+    )!
+    removeButton.click()
+    await wrapper.vm.$nextTick()
+
+    expect(document.body.textContent).not.toContain('a.txt')
+    expect(document.body.textContent).toContain('b.txt')
+  })
+
+  it('clears every selected file', async () => {
+    const wrapper = mountDialog('file')
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
+
+    await selectFiles(['a.txt', 'b.txt'])
+    clickButton(viLocale.drive.upload_clear_files)
+    await wrapper.vm.$nextTick()
+
+    expect(document.body.textContent).not.toContain('a.txt')
+    expect(document.body.textContent).not.toContain('b.txt')
+  })
+
+  it('closes the dialog and starts the upload when Start is pressed', async () => {
+    const store = useUploadStore()
+    const startSpy = vi.spyOn(store, 'startUpload').mockResolvedValue([])
+
+    const wrapper = mountDialog('file')
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
+
+    const files = await selectFiles(['sample.txt'])
     clickButton(viLocale.drive.upload_start)
 
     await vi.waitFor(() =>
-      expect(startUpload).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cloudAccountId: 1,
-          files: [file],
-          method: 'direct',
-        }),
+      expect(startSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ cloudAccountId: 1, files, method: 'direct' }),
       ),
     )
+    expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
   })
 
-  it('selects server method card and threads it into startUpload', async () => {
-    const { startUpload } = mockUseUpload()
+  it('selects the server method card and threads it into startUpload', async () => {
+    const store = useUploadStore()
+    const startSpy = vi.spyOn(store, 'startUpload').mockResolvedValue([])
 
     mountDialog('file')
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
 
-    const file = await selectFile()
+    await selectFiles(['sample.txt'])
 
     const serverCard = [...document.querySelectorAll<HTMLDivElement>('div')].find(
       (el) =>
@@ -106,23 +119,28 @@ describe('UploadDialog', () => {
     clickButton(viLocale.drive.upload_start)
 
     await vi.waitFor(() =>
-      expect(startUpload).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cloudAccountId: 1,
-          files: [file],
-          method: 'server',
-        }),
-      ),
+      expect(startSpy).toHaveBeenCalledWith(expect.objectContaining({ method: 'server' })),
     )
   })
 
+  it('does NOT close or start when nothing is selected', async () => {
+    const store = useUploadStore()
+    const startSpy = vi.spyOn(store, 'startUpload').mockResolvedValue([])
+
+    const wrapper = mountDialog('file')
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
+
+    clickButton(viLocale.drive.upload_start)
+    await wrapper.vm.$nextTick()
+
+    expect(startSpy).not.toHaveBeenCalled()
+    expect(wrapper.emitted('update:open')).toBeFalsy()
+  })
+
   it('auto-opens the folder picker when initialMode is "folder"', async () => {
-    mockUseUpload()
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click')
 
-    const wrapper = mountClosedDialog('folder')
-
-    // Toggle open to trigger the watch (Vue watch does not fire for the initial value).
+    const wrapper = mountDialog('folder', false)
     await wrapper.setProps({ open: true })
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
     await vi.waitFor(() => expect(clickSpy).toHaveBeenCalled())
@@ -131,17 +149,32 @@ describe('UploadDialog', () => {
   })
 
   it('does NOT auto-open the folder picker when initialMode is "file"', async () => {
-    mockUseUpload()
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click')
 
-    const wrapper = mountClosedDialog('file')
-
-    // Toggle open to trigger the watch (Vue watch does not fire for the initial value).
+    const wrapper = mountDialog('file', false)
     await wrapper.setProps({ open: true })
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
     await wrapper.vm.$nextTick()
 
     expect(clickSpy).not.toHaveBeenCalled()
     clickSpy.mockRestore()
+  })
+
+  // Review focus #2: opening the dialog must not wipe a background upload.
+  it('does not clear a running upload queue when reopened', async () => {
+    const store = useUploadStore()
+    const queued: UploadQueueItem = {
+      id: 'up-1',
+      file: new File(['x'], 'x.txt'),
+      progress: 0,
+      status: 'uploading',
+    }
+    store.uploadQueue = [queued]
+
+    const wrapper = mountDialog('file', false)
+    await wrapper.setProps({ open: true })
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.upload_title))
+
+    expect(store.uploadQueue).toHaveLength(1)
   })
 })

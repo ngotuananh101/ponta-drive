@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { fetchApi, type ApiResponse } from '@/api/client'
+import { useUploadStore } from '@/stores/upload'
 
 export interface User {
   id: number
@@ -64,6 +65,9 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = null
       user.value = null
       localStorage.removeItem('token')
+      // Tear down any in-flight uploads and empty the global queue so the
+      // panel does not show the previous user's file names after logout.
+      useUploadStore().abortAndClear()
     }
   }
 

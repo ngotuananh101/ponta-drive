@@ -1,17 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  Upload,
-  FolderUp,
-  FileText,
-  CheckCircle2,
-  AlertCircle,
-  X,
-  Loader2,
-  HardDrive,
-  Server,
-} from 'lucide-vue-next'
+import { Upload, FolderUp, FileText, X, HardDrive, Server } from 'lucide-vue-next'
 import {
   Dialog,
   DialogContent,
@@ -21,7 +11,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useUpload, type UploadMethod, type UploadQueueItem } from '@/composables/useUpload'
+import { humanizeBytes } from '@/lib/format'
+import { useUploadStore, type UploadMethod } from '@/stores/upload'
 
 const open = defineModel<boolean>('open', { required: true })
 
@@ -36,12 +27,8 @@ const props = withDefaults(
   },
 )
 
-const emit = defineEmits<{
-  completed: []
-}>()
-
 const { t } = useI18n()
-const { uploadQueue, isUploading, startUpload, cancelItem, clearQueue } = useUpload()
+const uploadStore = useUploadStore()
 
 const selectedFiles = ref<File[]>([])
 const uploadMethod = ref<UploadMethod>('direct')
@@ -52,8 +39,9 @@ const folderInput = ref<HTMLInputElement | null>(null)
 
 watch(open, async (isOpen) => {
   if (isOpen) {
+    // Only the local selection resets. The global upload queue is left alone so
+    // reopening the dialog never cancels an upload already running.
     selectedFiles.value = []
-    clearQueue()
     // When opening in "folder" mode, auto-launch the folder picker so the
     // user can pick a directory tree without an extra click.
     if (props.initialMode === 'folder') {
@@ -77,23 +65,27 @@ function handleDrop(event: DragEvent) {
   }
 }
 
-async function handleStart() {
-  if (selectedFiles.value.length === 0 || !props.cloudAccountId) return
-
-  await startUpload({
-    cloudAccountId: props.cloudAccountId,
-    parentUuid: props.parentUuid,
-    files: selectedFiles.value,
-    method: uploadMethod.value,
-  })
-
-  emit('completed')
+function removeFile(index: number) {
+  selectedFiles.value = selectedFiles.value.filter((_, i) => i !== index)
 }
 
-function close() {
-  if (!isUploading.value) {
-    open.value = false
-  }
+function handleStart() {
+  if (selectedFiles.value.length === 0 || !props.cloudAccountId) return
+
+  // Close first so the dialog disappears at once; the store keeps the upload
+  // alive and the global panel shows its progress.
+  open.value = false
+  void uploadStore
+    .startUpload({
+      cloudAccountId: props.cloudAccountId,
+      parentUuid: props.parentUuid,
+      files: selectedFiles.value,
+      method: uploadMethod.value,
+    })
+    // The store already settles every queued item's status on rejection
+    // (folder-tree walk or per-file), so the panel renders per-item state.
+    // Swallowing here prevents an unhandled rejection from surfacing.
+    .catch(() => {})
 }
 </script>
 
@@ -187,7 +179,6 @@ function close() {
 
         <!-- Drop target / file selection -->
         <div
-          v-if="!isUploading && uploadQueue.length === 0"
           class="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-3 transition-colors"
           :class="[isDragging ? 'border-primary bg-primary/5' : 'border-border bg-card/40']"
           @dragover.prevent="isDragging = true"
@@ -208,68 +199,52 @@ function close() {
             </Button>
           </div>
           <p class="text-xs text-muted-foreground">{{ t('drive.upload_drop_hint') }}</p>
-
-          <p v-if="selectedFiles.length > 0" class="text-xs font-medium text-primary mt-1">
-            {{ selectedFiles.length }} file(s) selected
-          </p>
         </div>
 
-        <!-- Upload Progress Queue -->
-        <div v-else class="space-y-2 max-h-60 overflow-y-auto pr-1">
-          <div
-            v-for="item in uploadQueue as UploadQueueItem[]"
-            :key="item.id"
-            class="flex items-center justify-between p-2.5 rounded-xl border border-border bg-card text-xs gap-3"
-          >
-            <div class="flex items-center gap-2 min-w-0 flex-1">
-              <FileText class="h-4 w-4 text-muted-foreground shrink-0" />
-              <div class="min-w-0 flex-1">
-                <p class="truncate font-medium text-foreground">{{ item.file.name }}</p>
-                <div class="w-full bg-muted h-1.5 rounded-full overflow-hidden mt-1.5">
-                  <div
-                    class="h-full bg-primary transition-all duration-200"
-                    :style="{ width: `${item.progress}%` }"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2 shrink-0">
-              <span class="text-muted-foreground font-mono">{{ item.progress }}%</span>
-              <CheckCircle2 v-if="item.status === 'completed'" class="h-4 w-4 text-emerald-500" />
-              <AlertCircle v-else-if="item.status === 'failed'" class="h-4 w-4 text-destructive" />
+        <!-- Selected files preview -->
+        <div v-if="selectedFiles.length > 0" class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-muted-foreground">
+              {{ t('drive.upload_selected_title', { count: selectedFiles.length }) }}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+              @click="selectedFiles = []"
+            >
+              {{ t('drive.upload_clear_files') }}
+            </Button>
+          </div>
+          <ul class="max-h-40 overflow-y-auto space-y-1 pr-1">
+            <li
+              v-for="(file, index) in selectedFiles"
+              :key="`${file.name}-${index}`"
+              class="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs"
+            >
+              <FileText class="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span class="truncate flex-1 text-foreground">{{ file.name }}</span>
+              <span class="text-muted-foreground font-mono shrink-0">{{ humanizeBytes(file.size) }}</span>
               <Button
-                v-else-if="item.status === 'uploading'"
                 variant="ghost"
                 size="icon"
-                class="h-6 w-6 text-muted-foreground hover:text-destructive"
-                @click="cancelItem(item.id)"
+                class="h-5 w-5 text-muted-foreground hover:text-destructive"
+                :aria-label="t('drive.upload_remove_file')"
+                @click="removeFile(index)"
               >
-                <X class="h-3.5 w-3.5" />
+                <X class="h-3 w-3" />
               </Button>
-            </div>
-          </div>
+            </li>
+          </ul>
         </div>
       </div>
 
       <DialogFooter class="gap-2 pt-2">
-        <Button variant="outline" :disabled="isUploading" @click="close">
+        <Button variant="outline" @click="open = false">
           {{ t('drive.cancel_button') }}
         </Button>
-        <Button
-          v-if="uploadQueue.length === 0"
-          :disabled="selectedFiles.length === 0 || isUploading"
-          @click="handleStart"
-        >
-          <Loader2 v-if="isUploading" class="h-4 w-4 animate-spin mr-1" />
+        <Button :disabled="selectedFiles.length === 0" @click="handleStart">
           {{ t('drive.upload_start') }}
-        </Button>
-        <Button
-          v-else
-          :disabled="isUploading"
-          @click="open = false"
-        >
-          {{ t('cloud.next') }}
         </Button>
       </DialogFooter>
     </DialogContent>
