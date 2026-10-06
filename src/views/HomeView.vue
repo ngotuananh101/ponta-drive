@@ -41,7 +41,7 @@ const loading = ref(true)
 const dashboard = ref<DashboardSummary | null>(null)
 
 interface CloudStorageSummary {
-  id: string
+  id: number
   name: string
   account: string
   icon: Component
@@ -61,7 +61,7 @@ interface SuggestedFile {
   /** The raw item, so the shared `DriveItemIcon` can pick the exact icon. */
   item: DriveItem
   isFolder: boolean
-  cloudId: string
+  cloudId: number
   cloudName: string
   cloudColor: string
   size: string
@@ -190,7 +190,7 @@ function activityIconColor(action: string) {
 
 const clouds = computed<CloudStorageSummary[]>(() =>
   (dashboard.value?.clouds ?? []).map((account: CloudAccount) => ({
-    id: account.uuid,
+    id: account.id,
     name: account.name,
     account: account.provider,
     icon: Cloud,
@@ -210,14 +210,14 @@ const clouds = computed<CloudStorageSummary[]>(() =>
 
 const suggestedFiles = computed<SuggestedFile[]>(() =>
   (dashboard.value?.suggested_files ?? []).map((item) => {
-    const owner = clouds.value.find((cloud) => cloud.id === item.cloud_account_uuid)
+    const owner = clouds.value.find((cloud) => cloud.id === item.cloud_account_id)
 
     return {
       id: item.uuid,
       name: item.name,
       item,
       isFolder: item.type === 'folder',
-      cloudId: item.cloud_account_uuid,
+      cloudId: item.cloud_account_id,
       cloudName: owner?.name || '—',
       cloudColor: 'text-emerald-500',
       size: humanizeBytes(item.size),
@@ -233,7 +233,7 @@ const activities = computed<RecentActivity[]>(() =>
       id: String(act.id),
       action: te(key) ? t(key) : act.action,
       target: act.target_name || '—',
-      cloud: clouds.value.find((cloud) => cloud.id === act.cloud_account_uuid)?.name || '—',
+      cloud: clouds.value.find((cloud) => cloud.id === act.cloud_account_id)?.name || '—',
       time: formatRelativeTime(act.created_at),
       icon: activityIcon(act.action),
       iconColor: activityIconColor(act.action),
@@ -255,7 +255,7 @@ const BREAKDOWN_COLORS = [
 const storageBreakdown = computed(() => {
   const total = storage.value?.total_bytes ?? 0
   return (dashboard.value?.clouds ?? []).map((account, index) => ({
-    id: account.uuid,
+    id: account.id,
     name: account.name,
     used: humanizeBytes(account.used_storage),
     colorClass: BREAKDOWN_COLORS[index % BREAKDOWN_COLORS.length],
@@ -268,11 +268,11 @@ const storagePercent = computed(() => {
   return Math.min(100, Math.max(0, percent))
 })
 
-function navigateToDrive(cloudUuid?: string) {
-  // A missing uuid must not reach `driveLocation`, which throws on an empty
+function navigateToDrive(cloudId?: number) {
+  // A missing id must not reach `driveLocation`, which throws on an empty
   // required param; staying on the home page is the only safe destination.
-  if (cloudUuid) {
-    router.push(driveLocation(cloudUuid))
+  if (cloudId) {
+    router.push(driveLocation(cloudId))
   } else {
     router.push({ name: 'home' })
   }
@@ -288,7 +288,7 @@ function openSuggestedFile(file: SuggestedFile) {
     toast.info(t('home.preview_coming_soon'))
     return
   }
-  // A folder whose owning account uuid is missing cannot build a valid URL;
+  // A folder whose owning account id is missing cannot build a valid URL;
   // `driveLocation` would throw. Send the user to the drive root instead.
   if (!file.cloudId) {
     router.push({ name: 'home' })
@@ -391,7 +391,7 @@ function handleAddCloud() {
                   >
                     {{ cloud.badge }}
                   </span>
-                  <SyncCloudButton :account-uuid="cloud.id" @synced="handleSynced" />
+                  <SyncCloudButton :account-id="cloud.id" @synced="handleSynced" />
                   <div
                     class="h-2 w-2 rounded-full"
                     :class="{

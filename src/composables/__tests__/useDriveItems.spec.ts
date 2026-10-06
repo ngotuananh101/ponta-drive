@@ -14,7 +14,7 @@ function item(uuid: string, name = uuid): DriveItem {
     mime_type: 'text/plain',
     size: 1,
     extension: 'txt',
-    cloud_account_uuid: 'acc-uuid',
+    cloud_account_id: 1,
     is_starred: false,
     status: 'ready',
     updated_at: '2026-10-01 00:00:00',
@@ -39,7 +39,7 @@ describe('useDriveItems composable', () => {
     let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid' }))
+      result = useDriveItems(() => ({ cloudAccountId: 1 }))
     })
 
     // Initial fetch is synchronous (no debounce on mount).
@@ -63,7 +63,7 @@ describe('useDriveItems composable', () => {
     const search = ref('')
     scope = effectScope()
     scope.run(() => {
-      useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid', search: search.value }), 250)
+      useDriveItems(() => ({ cloudAccountId: 1, search: search.value }), 250)
     })
 
     // Flush the initial fetch microtask.
@@ -92,20 +92,20 @@ describe('useDriveItems composable', () => {
       .spyOn(api, 'listDriveItems')
       .mockResolvedValue({ status: 'ok', data: [], meta: { has_more: false, next_cursor: '' } })
 
-    const cloudAccountUuid = ref('acc-uuid')
+    const cloudAccountId = ref(1)
     scope = effectScope()
     scope.run(() => {
-      useDriveItems(() => ({ cloudAccountUuid: cloudAccountUuid.value }), 0)
+      useDriveItems(() => ({ cloudAccountId: cloudAccountId.value }), 0)
     })
 
     await vi.advanceTimersByTimeAsync(0)
     expect(spy).toHaveBeenCalledTimes(1)
 
-    cloudAccountUuid.value = 'other-uuid'
+    cloudAccountId.value = 2
     await vi.advanceTimersByTimeAsync(0)
 
     expect(spy).toHaveBeenCalledTimes(2)
-    expect(spy.mock.calls[1][0].cloudAccountUuid).toBe('other-uuid')
+    expect(spy.mock.calls[1][0].cloudAccountId).toBe(2)
 
     vi.useRealTimers()
     scope.stop()
@@ -127,7 +127,7 @@ describe('useDriveItems composable', () => {
     let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid' }), 0)
+      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
     })
 
     await nextTick()
@@ -161,7 +161,7 @@ describe('useDriveItems composable', () => {
     let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid' }), 0)
+      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
     })
 
     await nextTick()
@@ -186,7 +186,7 @@ describe('useDriveItems composable', () => {
     let result: ReturnType<typeof useDriveItems>
     scope = effectScope()
     scope.run(() => {
-      result = useDriveItems(() => ({ cloudAccountUuid: 'acc-uuid' }), 0)
+      result = useDriveItems(() => ({ cloudAccountId: 1 }), 0)
     })
 
     await nextTick()

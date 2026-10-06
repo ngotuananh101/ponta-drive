@@ -15,9 +15,9 @@ export function useCloudSync() {
   const { t } = useI18n()
   const store = useCloudAccountsStore()
 
-  async function sync(uuid: string): Promise<void> {
+  async function sync(id: number): Promise<void> {
     try {
-      await store.sync(uuid)
+      await store.sync(id)
       toast.success(t('cloud.sync_started'))
     } catch {
       toast.error(t('cloud.sync_failed'))

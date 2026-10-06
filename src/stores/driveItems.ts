@@ -51,7 +51,7 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
 
   let requestId = 0
   let inFlight: AbortController | null = null
-  let lastQuery: DriveListQuery = { cloudAccountUuid: '' }
+  let lastQuery: DriveListQuery = { cloudAccountId: 0 }
 
   function reset(): void {
     // Abort whatever is in flight, then bump the id so any response that
@@ -119,11 +119,11 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
   }
 
   async function createFolder(
-    cloudAccountUuid: string,
+    cloudAccountId: number,
     parentUuid: string | null,
     name: string,
   ): Promise<DriveItem> {
-    const res = await createDriveFolder({ cloudAccountUuid, parentUuid, name })
+    const res = await createDriveFolder({ cloudAccountId, parentUuid, name })
     const created = res.data as DriveItem
     insertItem(created)
     return created
@@ -157,7 +157,7 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
   }
 
   async function load(query: DriveListQuery, from: string): Promise<void> {
-    if (!query.cloudAccountUuid) return
+    if (!query.cloudAccountId) return
 
     lastQuery = query
     const id = ++requestId

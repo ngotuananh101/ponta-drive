@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 
 import DriveView from '@/views/DriveView.vue'
+import { makeDriveRouter } from '@/test/driveRoutes'
 import * as cloudApi from '@/api/cloudAccounts'
 import * as driveApi from '@/api/driveItems'
 import type { CloudAccount } from '@/api/cloudAccounts'
@@ -13,7 +13,7 @@ import { useAuthStore } from '@/stores/auth'
 import viLocale from '@/locales/vi.json'
 
 const CLOUD: CloudAccount = {
-  uuid: 'acc-1',
+  id: 1,
   name: 'My S3',
   provider: 's3',
   credentials: null,
@@ -33,28 +33,12 @@ function driveItem(partial: Partial<DriveItem>): DriveItem {
     mime_type: '',
     size: 0,
     extension: '',
-    cloud_account_uuid: CLOUD.uuid,
+    cloud_account_id: CLOUD.id,
     is_starred: false,
     status: 'ready',
     updated_at: '2026-10-01 00:00:00',
     ...partial,
   }
-}
-
-function makeRouter(): Router {
-  return createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      { path: '/', name: 'home', component: { template: '<div/>' } },
-      { path: '/d/:cloudUuid', name: 'drive', component: DriveView, props: true },
-      {
-        path: '/d/:cloudUuid/f/:folderUuid',
-        name: 'drive-folder',
-        component: DriveView,
-        props: true,
-      },
-    ],
-  })
 }
 
 async function mountDrive(path: string, breadcrumb: DriveItem[]) {
@@ -77,7 +61,7 @@ async function mountDrive(path: string, breadcrumb: DriveItem[]) {
     avatar: '',
   }
 
-  const router = makeRouter()
+  const router = makeDriveRouter(DriveView)
   await router.push(path)
   await router.isReady()
 
@@ -87,7 +71,7 @@ async function mountDrive(path: string, breadcrumb: DriveItem[]) {
       plugins: [router, i18n],
       stubs: { DashboardLayout: { template: '<div><slot /></div>' }, SyncCloudButton: true },
     },
-    props: router.currentRoute.value.params as { cloudUuid: string; folderUuid?: string },
+    props: router.currentRoute.value.params as { cloudId: string; folderUuid?: string },
   })
   return { wrapper, router }
 }
@@ -101,7 +85,7 @@ beforeEach(() => {
 
 describe('DriveView document title', () => {
   it('uses the drive name at the root', async () => {
-    const { wrapper } = await mountDrive('/d/acc-1', [])
+    const { wrapper } = await mountDrive('/d/1', [])
     await vi.waitFor(() => expect(document.title).toContain('My S3'))
     expect(document.title).toBe('My S3 - Ponta Drive')
     // The in-page header shows the same name.
@@ -110,7 +94,7 @@ describe('DriveView document title', () => {
   })
 
   it('uses the current folder name inside a folder', async () => {
-    const { wrapper } = await mountDrive('/d/acc-1/f/folder-9', [
+    const { wrapper } = await mountDrive('/d/1/f/folder-9', [
       driveItem({ uuid: 'folder-9', name: 'Photos' }),
     ])
     await vi.waitFor(() => expect(document.title).toContain('Photos'))

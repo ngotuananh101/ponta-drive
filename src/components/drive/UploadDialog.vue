@@ -27,7 +27,7 @@ const open = defineModel<boolean>('open', { required: true })
 
 const props = withDefaults(
   defineProps<{
-    cloudAccountUuid: string
+    cloudAccountId: number
     parentUuid?: string | null
     initialMode?: 'file' | 'folder'
   }>(),
@@ -78,10 +78,10 @@ function handleDrop(event: DragEvent) {
 }
 
 async function handleStart() {
-  if (selectedFiles.value.length === 0 || !props.cloudAccountUuid) return
+  if (selectedFiles.value.length === 0 || !props.cloudAccountId) return
 
   await startUpload({
-    cloudAccountUuid: props.cloudAccountUuid,
+    cloudAccountId: props.cloudAccountId,
     parentUuid: props.parentUuid,
     files: selectedFiles.value,
     method: uploadMethod.value,

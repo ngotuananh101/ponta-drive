@@ -13,7 +13,7 @@ function item(uuid: string, name = uuid): DriveItem {
     mime_type: 'text/plain',
     size: 1,
     extension: 'txt',
-    cloud_account_uuid: 'acc-uuid',
+    cloud_account_id: 1,
     is_starred: false,
     status: 'ready',
     updated_at: '2026-10-01 00:00:00',
@@ -45,7 +45,7 @@ describe('driveItems store', () => {
     })
 
     const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid' })
+    await store.loadFirstPage({ cloudAccountId: 1 })
 
     expect(store.items.map((i) => i.uuid)).toEqual(['a', 'b'])
     expect(store.cursor).toBe('c1')
@@ -66,7 +66,7 @@ describe('driveItems store', () => {
       })
 
     const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid' })
+    await store.loadFirstPage({ cloudAccountId: 1 })
     await store.loadNextPage()
 
     expect(store.items.map((i) => i.uuid)).toEqual(['a', 'b', 'c'])
@@ -81,7 +81,7 @@ describe('driveItems store', () => {
     })
 
     const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid' })
+    await store.loadFirstPage({ cloudAccountId: 1 })
     await store.loadNextPage()
 
     expect(spy).toHaveBeenCalledTimes(1)
@@ -95,7 +95,7 @@ describe('driveItems store', () => {
     })
 
     const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid' })
+    await store.loadFirstPage({ cloudAccountId: 1 })
     store.reset()
 
     expect(store.items).toEqual([])
@@ -113,7 +113,7 @@ describe('driveItems store', () => {
       .mockRejectedValueOnce(new Error('network down'))
 
     const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid' })
+    await store.loadFirstPage({ cloudAccountId: 1 })
     await store.loadNextPage()
 
     expect(store.items.map((i) => i.uuid)).toEqual(['a'])
@@ -132,8 +132,8 @@ describe('driveItems store', () => {
 
     const store = useDriveItemsStore()
 
-    const p1 = store.loadFirstPage({ cloudAccountUuid: 'acc-uuid', search: 'old' })
-    const p2 = store.loadFirstPage({ cloudAccountUuid: 'acc-uuid', search: 'new' })
+    const p1 = store.loadFirstPage({ cloudAccountId: 1, search: 'old' })
+    const p2 = store.loadFirstPage({ cloudAccountId: 1, search: 'new' })
 
     // The newer request settles first, then the older one straggles in.
     second.resolve({ status: 'ok', data: [item('new')], meta: { has_more: false, next_cursor: '' } })
@@ -156,11 +156,11 @@ describe('driveItems store', () => {
       })
 
     const store = useDriveItemsStore()
-    const p1 = store.loadFirstPage({ cloudAccountUuid: 'acc-uuid', search: 'old' })
+    const p1 = store.loadFirstPage({ cloudAccountId: 1, search: 'old' })
     const signal = spy.mock.calls[0]?.[1]
     expect(signal?.aborted).toBe(false)
 
-    const p2 = store.loadFirstPage({ cloudAccountUuid: 'acc-uuid', search: 'new' })
+    const p2 = store.loadFirstPage({ cloudAccountId: 1, search: 'new' })
     // The older request must be cancelled at the network, not merely ignored
     // when it returns.
     expect(signal?.aborted).toBe(true)
@@ -184,8 +184,8 @@ describe('driveItems store', () => {
       })
 
     const store = useDriveItemsStore()
-    const p1 = store.loadFirstPage({ cloudAccountUuid: 'acc-uuid', search: 'old' })
-    const p2 = store.loadFirstPage({ cloudAccountUuid: 'acc-uuid', search: 'new' })
+    const p1 = store.loadFirstPage({ cloudAccountId: 1, search: 'old' })
+    const p2 = store.loadFirstPage({ cloudAccountId: 1, search: 'new' })
 
     // A plain object, not a DOMException: the store matches on `name`, so this
     // proves the check does not depend on the runtime's DOMException class.
@@ -228,8 +228,8 @@ describe('driveItems store', () => {
     })
 
     const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid', search: '' })
-    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid', search: 'report' })
+    await store.loadFirstPage({ cloudAccountId: 1, search: '' })
+    await store.loadFirstPage({ cloudAccountId: 1, search: 'report' })
 
     expect(store.items.map((i) => i.uuid)).toEqual(['a'])
     expect(store.error).toBe(null)
@@ -247,7 +247,7 @@ describe('driveItems store', () => {
     })
 
     const store = useDriveItemsStore()
-    await store.loadFirstPage({ cloudAccountUuid: 'acc-uuid' })
+    await store.loadFirstPage({ cloudAccountId: 1 })
 
     const moved = await store.move('a', 'dest-uuid')
 
@@ -264,7 +264,7 @@ describe('driveItems store', () => {
     const store = useDriveItemsStore()
     store.items = [item('a')]
 
-    const res = await store.createFolder('acc-uuid', null, 'New Folder')
+    const res = await store.createFolder(1, null, 'New Folder')
     expect(res.uuid).toBe('f-new')
     expect(store.items[0]?.uuid).toBe('f-new')
     expect(store.items).toHaveLength(2)
@@ -319,19 +319,19 @@ describe('driveItems store', () => {
 // string. A dropped or misspelled parameter is invisible in the UI: the list
 // silently keeps the old order and looks like the click did nothing.
 describe('buildDriveItemsQuery', () => {
-  it('sends the account and parent uuids', () => {
+  it('sends the account id and parent uuid', () => {
     const query = api.buildDriveItemsQuery({
-      cloudAccountUuid: 'acc-uuid',
+      cloudAccountId: 1,
       parentUuid: 'folder-uuid',
     })
 
-    expect(query).toContain('cloud_account_uuid=acc-uuid')
+    expect(query).toContain('cloud_account_id=1')
     expect(query).toContain('parent_uuid=folder-uuid')
-    expect(query).not.toContain('cloud_account_id')
+    expect(query).not.toContain('cloud_account_uuid')
   })
 
   it('omits the parent at the account root', () => {
-    const query = api.buildDriveItemsQuery({ cloudAccountUuid: 'acc-uuid' })
+    const query = api.buildDriveItemsQuery({ cloudAccountId: 1 })
     expect(query).not.toContain('parent_uuid')
   })
 })

@@ -39,14 +39,14 @@ const router = createRouter({
       meta: { requiresAuth: true, titleKey: 'routes.home' },
     },
     {
-      path: '/d/:cloudUuid',
+      path: '/d/:cloudId',
       name: 'drive',
       component: () => import('@/views/DriveView.vue'),
       props: true,
       meta: { requiresAuth: true, titleKey: 'routes.drive' },
     },
     {
-      path: '/d/:cloudUuid/f/:folderUuid',
+      path: '/d/:cloudId/f/:folderUuid',
       name: 'drive-folder',
       component: () => import('@/views/DriveView.vue'),
       props: true,

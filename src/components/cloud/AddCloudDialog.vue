@@ -33,9 +33,9 @@ const open = defineModel<boolean>('open', { required: true })
  * `update`. An empty secret field keeps the stored one, so a user editing only
  * the name does not have to re-enter credentials they cannot see.
  */
-const props = defineProps<{ editUuid?: string | null }>()
+const props = defineProps<{ editId?: number | null }>()
 
-const isEdit = computed(() => Boolean(props.editUuid))
+const isEdit = computed(() => Boolean(props.editId))
 
 const { t } = useI18n()
 const store = useCloudAccountsStore()
@@ -80,7 +80,7 @@ watch(
 
 // `immediate` matters for the edit path: the dialog is normally mounted closed
 // and reset when it opens, but a caller may mount it already open (with an
-// `editUuid`), and the form must still be prefilled in that case.
+// `editId`), and the form must still be prefilled in that case.
 watch(
   open,
   (isOpen) => {
@@ -94,8 +94,8 @@ function reset() {
   testError.value = null
   fieldErrors.value = {}
 
-  const account = props.editUuid
-    ? store.accounts.find((a) => a.uuid === props.editUuid)
+  const account = props.editId
+    ? store.accounts.find((a) => a.id === props.editId)
     : undefined
 
   if (account) {
@@ -191,7 +191,7 @@ async function save() {
   saving.value = true
   fieldErrors.value = {}
   try {
-    if (isEdit.value && props.editUuid) {
+    if (isEdit.value && props.editId) {
       // The provider cannot change after creation, and an empty secret means
       // "keep the stored one" — omit it so the backend does not overwrite the
       // credentials with a blank value.
@@ -208,7 +208,7 @@ async function save() {
       if (p.secret_access_key.trim() !== '') {
         update.secret_access_key = p.secret_access_key
       }
-      await store.update(props.editUuid, update)
+      await store.update(props.editId, update)
       toast.success(t('cloud.update_success'))
     } else {
       await store.create(payload())

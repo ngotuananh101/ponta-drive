@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { toast } from 'vue-sonner'
 
 import HomeView from '@/views/HomeView.vue'
+import { makeDriveRouter } from '@/test/driveRoutes'
 import * as dashboardApi from '@/api/dashboard'
 import * as cloudApi from '@/api/cloudAccounts'
 import type { CloudAccount } from '@/api/cloudAccounts'
@@ -13,7 +13,7 @@ import type { DriveItem } from '@/api/driveItems'
 import viLocale from '@/locales/vi.json'
 
 const CLOUD: CloudAccount = {
-  uuid: 'acc-uuid-1',
+  id: 1,
   name: 'My S3',
   provider: 's3',
   credentials: null,
@@ -33,23 +33,12 @@ function driveItem(partial: Partial<DriveItem>): DriveItem {
     mime_type: 'image/png',
     size: 1024,
     extension: 'png',
-    cloud_account_uuid: CLOUD.uuid,
+    cloud_account_id: CLOUD.id,
     is_starred: false,
     status: 'ready',
     updated_at: '2026-10-01 00:00:00',
     ...partial,
   }
-}
-
-function makeRouter(): Router {
-  return createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      { path: '/', name: 'home', component: { template: '<div/>' } },
-      { path: '/d/:cloudUuid', name: 'drive', component: { template: '<div/>' } },
-      { path: '/d/:cloudUuid/f/:folderUuid', name: 'drive-folder', component: { template: '<div/>' } },
-    ],
-  })
 }
 
 async function mountHome(files: DriveItem[]) {
@@ -64,7 +53,7 @@ async function mountHome(files: DriveItem[]) {
   })
   vi.spyOn(cloudApi, 'listCloudAccounts').mockResolvedValue({ status: 'ok', data: [CLOUD] })
 
-  const router = makeRouter()
+  const router = makeDriveRouter()
   await router.push('/')
   await router.isReady()
 
@@ -102,7 +91,7 @@ describe('HomeView suggested files', () => {
 
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('drive-folder'))
     expect(router.currentRoute.value.params).toMatchObject({
-      cloudUuid: 'acc-uuid-1',
+      cloudId: '1',
       folderUuid: 'folder-9',
     })
   })
@@ -118,9 +107,9 @@ describe('HomeView suggested files', () => {
     expect(router.currentRoute.value.name).toBe('home')
   })
 
-  it('falls back to home for a folder whose account uuid is missing', async () => {
+  it('falls back to home for a folder whose account id is missing', async () => {
     const { wrapper, router } = await mountHome([
-      driveItem({ uuid: 'folder-9', name: 'Orphan', type: 'folder', mime_type: '', cloud_account_uuid: '' }),
+      driveItem({ uuid: 'folder-9', name: 'Orphan', type: 'folder', mime_type: '', cloud_account_id: 0 }),
     ])
 
     await cardFor(wrapper, 'Orphan')!.trigger('click')

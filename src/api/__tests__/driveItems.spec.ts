@@ -17,7 +17,7 @@ describe('driveItems API mutations', () => {
   it('createDriveFolder posts to /v1/drive/items/folders', async () => {
     const spy = vi.spyOn(client, 'fetchApi').mockResolvedValue({ status: 'ok' })
     await createDriveFolder({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: 'folder-1',
       name: 'New Folder',
     })
@@ -25,7 +25,7 @@ describe('driveItems API mutations', () => {
     expect(spy).toHaveBeenCalledWith('/v1/drive/items/folders', {
       method: 'POST',
       body: JSON.stringify({
-        cloud_account_uuid: 'cloud-1',
+        cloud_account_id: 1,
         parent_uuid: 'folder-1',
         name: 'New Folder',
       }),

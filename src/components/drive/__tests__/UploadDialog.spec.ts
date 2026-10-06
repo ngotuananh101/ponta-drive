@@ -24,7 +24,7 @@ function mockUseUpload(startUploadMock: ReturnType<typeof vi.fn> = vi.fn().mockR
 function mountDialog(initialMode: 'file' | 'folder' = 'file') {
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
   return mount(UploadDialog, {
-    props: { open: true, cloudAccountUuid: 'cloud-1', parentUuid: null, initialMode },
+    props: { open: true, cloudAccountId: 1, parentUuid: null, initialMode },
     global: { plugins: [i18n] },
     attachTo: document.body,
   })
@@ -33,7 +33,7 @@ function mountDialog(initialMode: 'file' | 'folder' = 'file') {
 function mountClosedDialog(initialMode: 'file' | 'folder' = 'file') {
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
   return mount(UploadDialog, {
-    props: { open: false, cloudAccountUuid: 'cloud-1', parentUuid: null, initialMode },
+    props: { open: false, cloudAccountId: 1, parentUuid: null, initialMode },
     global: { plugins: [i18n] },
     attachTo: document.body,
   })
@@ -80,7 +80,7 @@ describe('UploadDialog', () => {
     await vi.waitFor(() =>
       expect(startUpload).toHaveBeenCalledWith(
         expect.objectContaining({
-          cloudAccountUuid: 'cloud-1',
+          cloudAccountId: 1,
           files: [file],
           method: 'direct',
         }),
@@ -108,7 +108,7 @@ describe('UploadDialog', () => {
     await vi.waitFor(() =>
       expect(startUpload).toHaveBeenCalledWith(
         expect.objectContaining({
-          cloudAccountUuid: 'cloud-1',
+          cloudAccountId: 1,
           files: [file],
           method: 'server',
         }),

@@ -13,7 +13,7 @@ const mockItem: DriveItem = {
   mime_type: 'text/plain',
   size: 100,
   extension: 'txt',
-  cloud_account_uuid: 'cloud-1',
+  cloud_account_id: 1,
   is_starred: false,
   status: 'ready',
   updated_at: '2026-10-04 00:00:00',
@@ -47,7 +47,7 @@ describe('useUpload composable', () => {
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
     const res = await startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: null,
       files: [file],
       method: 'direct',
@@ -85,7 +85,7 @@ describe('useUpload composable', () => {
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
     const res = await startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: null,
       files: [file],
       method: 'server',
@@ -123,7 +123,7 @@ describe('useUpload composable', () => {
     const file = new File(['a'.repeat(20)], 'test.txt', { type: 'text/plain' })
 
     const promise = startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: null,
       files: [file],
       method: 'server',
@@ -167,7 +167,7 @@ describe('useUpload composable', () => {
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
     const res = await startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: null,
       files: [file],
       method: 'server',
@@ -199,7 +199,7 @@ describe('useUpload composable', () => {
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
     const promise = startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: null,
       files: [file],
       method: 'direct',
@@ -236,7 +236,7 @@ describe('useUpload composable', () => {
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
     await startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: null,
       files: [file],
       method: 'direct',
@@ -270,7 +270,7 @@ describe('useUpload composable', () => {
       mime_type: 'application/vnd.folder',
       size: 0,
       extension: '',
-      cloud_account_uuid: 'cloud-1',
+      cloud_account_id: 1,
       is_starred: false,
       status: 'ready',
       updated_at: '2026-10-04 00:00:00',
@@ -282,7 +282,7 @@ describe('useUpload composable', () => {
       mime_type: 'application/vnd.folder',
       size: 0,
       extension: '',
-      cloud_account_uuid: 'cloud-1',
+      cloud_account_id: 1,
       is_starred: false,
       status: 'ready',
       updated_at: '2026-10-04 00:00:00',
@@ -301,7 +301,7 @@ describe('useUpload composable', () => {
     Object.defineProperty(file, 'webkitRelativePath', { value: 'photos/2024/a.jpg' })
 
     const res = await startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: 'root-parent',
       files: [file],
       method: 'direct',
@@ -309,13 +309,13 @@ describe('useUpload composable', () => {
 
     // createDriveFolder called for top-level "photos" (parent = root-parent)...
     expect(createFolderSpy).toHaveBeenCalledWith({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: 'root-parent',
       name: 'photos',
     })
     // ...and for nested "2024" (parent = uuid returned for "photos").
     expect(createFolderSpy).toHaveBeenCalledWith({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: photosFolder.uuid,
       name: '2024',
     })
@@ -359,7 +359,7 @@ describe('useUpload composable', () => {
       mime_type: 'application/vnd.folder',
       size: 0,
       extension: '',
-      cloud_account_uuid: 'cloud-1',
+      cloud_account_id: 1,
       is_starred: false,
       status: 'ready',
       updated_at: '2026-10-04 00:00:00',
@@ -379,7 +379,7 @@ describe('useUpload composable', () => {
     Object.defineProperty(file, 'webkitRelativePath', { value: 'photos/2024/a.jpg' })
 
     await startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: 'root-parent',
       files: [file],
       method: 'direct',
@@ -390,7 +390,7 @@ describe('useUpload composable', () => {
     expect(storeCreateSpy).not.toHaveBeenCalled()
     expect(createFolderSpy).toHaveBeenCalledTimes(1)
     expect(createFolderSpy).toHaveBeenCalledWith({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: existingPhotosFolder.uuid,
       name: '2024',
     })
@@ -424,7 +424,7 @@ describe('useUpload composable', () => {
     // No webkitRelativePath -> flat selection.
 
     await startUpload({
-      cloudAccountUuid: 'cloud-1',
+      cloudAccountId: 1,
       parentUuid: 'p',
       files: [file],
       method: 'direct',
