@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { useUpload } from '../useUpload'
+import { useUploadStore } from '../upload'
 import * as uploadApi from '@/api/upload'
 import * as driveItemsApi from '@/api/driveItems'
 import { useDriveItemsStore } from '@/stores/driveItems'
@@ -19,34 +19,38 @@ const mockItem: DriveItem = {
   updated_at: '2026-10-04 00:00:00',
 }
 
-describe('useUpload composable', () => {
+function mockPresignedInit() {
+  return vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
+    status: 'ok',
+    data: {
+      item_uuid: 'item-1',
+      upload_url: 'https://s3.example.com/put',
+      method: 'PUT',
+      headers: {},
+      expires_at: '',
+      item: mockItem,
+    },
+  })
+}
+
+describe('upload store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.restoreAllMocks()
   })
 
-  it('runs direct upload flow', async () => {
-    const initSpy = vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
-      status: 'ok',
-      data: {
-        item_uuid: 'item-1',
-        upload_url: 'https://s3.example.com/put',
-        method: 'PUT',
-        headers: {},
-        expires_at: '',
-        item: mockItem,
-      },
-    })
+  it('runs the direct upload flow', async () => {
+    const initSpy = mockPresignedInit()
     const directSpy = vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
     const compSpy = vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({
       status: 'ok',
       data: mockItem,
     })
 
-    const { uploadQueue, startUpload } = useUpload()
+    const store = useUploadStore()
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
-    const res = await startUpload({
+    const res = await store.startUpload({
       cloudAccountId: 1,
       parentUuid: null,
       files: [file],
@@ -57,23 +61,21 @@ describe('useUpload composable', () => {
     expect(directSpy).toHaveBeenCalled()
     expect(compSpy).toHaveBeenCalledWith('item-1')
     expect(res).toHaveLength(1)
-    expect(uploadQueue.value[0].status).toBe('completed')
-    expect(uploadQueue.value[0].progress).toBe(100)
+    expect(store.uploadQueue[0]?.status).toBe('completed')
+    expect(store.uploadQueue[0]?.progress).toBe(100)
   })
 
-  it('runs server multipart upload flow', async () => {
-    const initSpy = vi
-      .spyOn(uploadApi, 'initiateMultipartUpload')
-      .mockResolvedValue({
-        status: 'ok',
-        data: {
-          session_id: 'session-1',
-          upload_id: 'upload-1',
-          total_parts: 1,
-          chunk_size: 5 * 1024 * 1024,
-          storage_path: 'path/to/file',
-        },
-      })
+  it('runs the server multipart upload flow', async () => {
+    const initSpy = vi.spyOn(uploadApi, 'initiateMultipartUpload').mockResolvedValue({
+      status: 'ok',
+      data: {
+        session_id: 'session-1',
+        upload_id: 'upload-1',
+        total_parts: 1,
+        chunk_size: 5 * 1024 * 1024,
+        storage_path: 'path/to/file',
+      },
+    })
     const chunkSpy = vi.spyOn(uploadApi, 'uploadMultipartChunk').mockResolvedValue()
     const compSpy = vi.spyOn(uploadApi, 'completeMultipartUpload').mockResolvedValue({
       status: 'ok',
@@ -81,10 +83,10 @@ describe('useUpload composable', () => {
     })
     vi.spyOn(uploadApi, 'abortMultipartUpload').mockResolvedValue({ status: 'ok' })
 
-    const { uploadQueue, startUpload } = useUpload()
+    const store = useUploadStore()
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
-    const res = await startUpload({
+    const res = await store.startUpload({
       cloudAccountId: 1,
       parentUuid: null,
       files: [file],
@@ -95,53 +97,47 @@ describe('useUpload composable', () => {
     expect(chunkSpy).toHaveBeenCalledTimes(1)
     expect(compSpy).toHaveBeenCalledWith('session-1')
     expect(res).toHaveLength(1)
-    expect(uploadQueue.value[0].status).toBe('completed')
+    expect(store.uploadQueue[0]?.status).toBe('completed')
   })
 
   it('aborts a server multipart upload mid-chunk and calls abortMultipartUpload', async () => {
-    const initSpy = vi
-      .spyOn(uploadApi, 'initiateMultipartUpload')
-      .mockResolvedValue({
-        status: 'ok',
-        data: {
-          session_id: 'session-1',
-          upload_id: 'upload-1',
-          total_parts: 3,
-          chunk_size: 5 * 1024 * 1024,
-          storage_path: 'path/to/file',
-        },
-      })
+    const initSpy = vi.spyOn(uploadApi, 'initiateMultipartUpload').mockResolvedValue({
+      status: 'ok',
+      data: {
+        session_id: 'session-1',
+        upload_id: 'upload-1',
+        total_parts: 3,
+        chunk_size: 5 * 1024 * 1024,
+        storage_path: 'path/to/file',
+      },
+    })
     const abortSpy = vi.spyOn(uploadApi, 'abortMultipartUpload').mockResolvedValue({ status: 'ok' })
-
-    // Each chunk upload rejects with an AbortError so the loop stops mid-flight.
     const chunkSpy = vi
       .spyOn(uploadApi, 'uploadMultipartChunk')
       .mockRejectedValue(new DOMException('Upload aborted', 'AbortError'))
     const compSpy = vi.spyOn(uploadApi, 'completeMultipartUpload').mockResolvedValue({ status: 'ok', data: mockItem })
 
-    const { uploadQueue, startUpload, cancelItem } = useUpload()
+    const store = useUploadStore()
     const file = new File(['a'.repeat(20)], 'test.txt', { type: 'text/plain' })
 
-    const promise = startUpload({
+    const promise = store.startUpload({
       cloudAccountId: 1,
       parentUuid: null,
       files: [file],
       method: 'server',
     })
 
-    // Start the upload (synchronous kickoff), then cancel the in-flight item.
     await Promise.resolve()
-    const item = uploadQueue.value[0]
-    expect(item.status).toBe('uploading')
-    cancelItem(item.id)
+    const item = store.uploadQueue[0]
+    expect(item?.status).toBe('uploading')
+    store.cancelItem(item!.id)
 
     const res = await promise
 
     expect(initSpy).toHaveBeenCalled()
     expect(abortSpy).toHaveBeenCalledWith('session-1')
     expect(res).toHaveLength(0)
-    expect(uploadQueue.value[0].status).toBe('aborted')
-    // completeMultipartUpload should never have been called because the upload was aborted.
+    expect(store.uploadQueue[0]?.status).toBe('aborted')
     expect(compSpy).not.toHaveBeenCalled()
     expect(chunkSpy).toHaveBeenCalled()
   })
@@ -163,10 +159,10 @@ describe('useUpload composable', () => {
     vi.spyOn(uploadApi, 'completeMultipartUpload').mockResolvedValue({ status: 'ok', data: mockItem })
     vi.spyOn(uploadApi, 'abortMultipartUpload').mockResolvedValue({ status: 'ok' })
 
-    const { uploadQueue, startUpload } = useUpload()
+    const store = useUploadStore()
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
-    const res = await startUpload({
+    const res = await store.startUpload({
       cloudAccountId: 1,
       parentUuid: null,
       files: [file],
@@ -174,31 +170,21 @@ describe('useUpload composable', () => {
     })
 
     expect(res).toHaveLength(0)
-    expect(uploadQueue.value[0].status).toBe('failed')
-    expect(uploadQueue.value[0].error).toContain('Network error')
+    expect(store.uploadQueue[0]?.status).toBe('failed')
+    expect(store.uploadQueue[0]?.error).toContain('Network error')
   })
 
   it('cancels a direct upload via abortController', async () => {
-    const initSpy = vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
-      status: 'ok',
-      data: {
-        item_uuid: 'item-1',
-        upload_url: 'https://s3.example.com/put',
-        method: 'PUT',
-        headers: {},
-        expires_at: '',
-        item: mockItem,
-      },
-    })
+    const initSpy = mockPresignedInit()
     const directSpy = vi
       .spyOn(uploadApi, 'uploadDirectToS3')
       .mockRejectedValue(new DOMException('Upload aborted', 'AbortError'))
     vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
 
-    const { uploadQueue, startUpload, cancelItem } = useUpload()
+    const store = useUploadStore()
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
-    const promise = startUpload({
+    const promise = store.startUpload({
       cloudAccountId: 1,
       parentUuid: null,
       files: [file],
@@ -206,60 +192,40 @@ describe('useUpload composable', () => {
     })
 
     await Promise.resolve()
-    const item = uploadQueue.value[0]
-    cancelItem(item.id)
+    const item = store.uploadQueue[0]
+    store.cancelItem(item!.id)
 
     const res = await promise
 
     expect(initSpy).toHaveBeenCalled()
     expect(directSpy).toHaveBeenCalled()
     expect(res).toHaveLength(0)
-    expect(uploadQueue.value[0].status).toBe('aborted')
+    expect(store.uploadQueue[0]?.status).toBe('aborted')
   })
 
   it('clearQueue empties the upload queue', async () => {
-    vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
-      status: 'ok',
-      data: {
-        item_uuid: 'item-1',
-        upload_url: 'https://s3.example.com/put',
-        method: 'PUT',
-        headers: {},
-        expires_at: '',
-        item: mockItem,
-      },
-    })
+    mockPresignedInit()
     vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
     vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
 
-    const { uploadQueue, startUpload, clearQueue } = useUpload()
+    const store = useUploadStore()
     const file = new File(['content'], 'test.txt', { type: 'text/plain' })
 
-    await startUpload({
+    await store.startUpload({
       cloudAccountId: 1,
       parentUuid: null,
       files: [file],
       method: 'direct',
     })
 
-    expect(uploadQueue.value).toHaveLength(1)
+    expect(store.uploadQueue).toHaveLength(1)
 
-    clearQueue()
-    expect(uploadQueue.value).toHaveLength(0)
+    store.clearQueue()
+    expect(store.uploadQueue).toHaveLength(0)
   })
 
   it('preserves the directory tree for a folder upload', async () => {
-    const initSpy = vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
-      status: 'ok',
-      data: {
-        item_uuid: 'item-1',
-        upload_url: 'https://s3.example.com/put',
-        method: 'PUT',
-        headers: {},
-        expires_at: '',
-        item: mockItem,
-      },
-    })
+    const initSpy = mockPresignedInit()
     vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
     vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
 
@@ -295,35 +261,30 @@ describe('useUpload composable', () => {
         return { status: 'ok', data: folder }
       })
 
-    const { uploadQueue, startUpload } = useUpload()
+    const store = useUploadStore()
 
     const file = new File(['content'], 'a.jpg', { type: 'image/jpeg' })
     Object.defineProperty(file, 'webkitRelativePath', { value: 'photos/2024/a.jpg' })
 
-    const res = await startUpload({
+    const res = await store.startUpload({
       cloudAccountId: 1,
       parentUuid: 'root-parent',
       files: [file],
       method: 'direct',
     })
 
-    // createDriveFolder called for top-level "photos" (parent = root-parent)...
     expect(createFolderSpy).toHaveBeenCalledWith({
       cloudAccountId: 1,
       parentUuid: 'root-parent',
       name: 'photos',
     })
-    // ...and for nested "2024" (parent = uuid returned for "photos").
     expect(createFolderSpy).toHaveBeenCalledWith({
       cloudAccountId: 1,
       parentUuid: photosFolder.uuid,
       name: '2024',
     })
-    // "photos" is created via the store (which calls createDriveFolder), and
-    // "2024" is created via the raw API — both go through createDriveFolder.
     expect(createFolderSpy).toHaveBeenCalledTimes(2)
 
-    // The file's presigned upload targets the deepest folder (2024).
     expect(initSpy).toHaveBeenCalledTimes(1)
     expect(initSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -333,22 +294,12 @@ describe('useUpload composable', () => {
     )
 
     expect(res).toHaveLength(1)
-    expect(uploadQueue.value[0].status).toBe('completed')
-    expect(initSpy.mock.calls[0][0].parentUuid).toBe('folder-2024')
+    expect(store.uploadQueue[0]?.status).toBe('completed')
+    expect(initSpy.mock.calls[0]?.[0].parentUuid).toBe('folder-2024')
   })
 
   it('reuses an existing top-level folder instead of creating a duplicate', async () => {
-    const initSpy = vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
-      status: 'ok',
-      data: {
-        item_uuid: 'item-1',
-        upload_url: 'https://s3.example.com/put',
-        method: 'PUT',
-        headers: {},
-        expires_at: '',
-        item: mockItem,
-      },
-    })
+    const initSpy = mockPresignedInit()
     vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
     vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
 
@@ -373,20 +324,18 @@ describe('useUpload composable', () => {
     store.items = [existingPhotosFolder]
     const storeCreateSpy = vi.spyOn(store, 'createFolder').mockResolvedValue(existingPhotosFolder)
 
-    const { startUpload } = useUpload()
+    const upload = useUploadStore()
 
     const file = new File(['content'], 'a.jpg', { type: 'image/jpeg' })
     Object.defineProperty(file, 'webkitRelativePath', { value: 'photos/2024/a.jpg' })
 
-    await startUpload({
+    await upload.startUpload({
       cloudAccountId: 1,
       parentUuid: 'root-parent',
       files: [file],
       method: 'direct',
     })
 
-    // The top-level "photos" folder already exists, so it must be reused and
-    // NOT created via either the store or the raw API.
     expect(storeCreateSpy).not.toHaveBeenCalled()
     expect(createFolderSpy).toHaveBeenCalledTimes(1)
     expect(createFolderSpy).toHaveBeenCalledWith({
@@ -400,30 +349,21 @@ describe('useUpload composable', () => {
   })
 
   it('does not create folders for a flat file selection', async () => {
-    const initSpy = vi.spyOn(uploadApi, 'initiatePresignedUpload').mockResolvedValue({
-      status: 'ok',
-      data: {
-        item_uuid: 'item-1',
-        upload_url: 'https://s3.example.com/put',
-        method: 'PUT',
-        headers: {},
-        expires_at: '',
-        item: mockItem,
-      },
-    })
+    const initSpy = mockPresignedInit()
     vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
     vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
 
-    const createFolderSpy = vi.spyOn(driveItemsApi, 'createDriveFolder').mockResolvedValue({ status: 'ok', data: mockItem })
+    const createFolderSpy = vi
+      .spyOn(driveItemsApi, 'createDriveFolder')
+      .mockResolvedValue({ status: 'ok', data: mockItem })
 
     const store = useDriveItemsStore()
     const storeCreateSpy = vi.spyOn(store, 'createFolder').mockResolvedValue(mockItem)
 
-    const { startUpload } = useUpload()
+    const upload = useUploadStore()
     const file = new File(['content'], 'flat.txt', { type: 'text/plain' })
-    // No webkitRelativePath -> flat selection.
 
-    await startUpload({
+    await upload.startUpload({
       cloudAccountId: 1,
       parentUuid: 'p',
       files: [file],
@@ -433,5 +373,52 @@ describe('useUpload composable', () => {
     expect(createFolderSpy).not.toHaveBeenCalled()
     expect(storeCreateSpy).not.toHaveBeenCalled()
     expect(initSpy).toHaveBeenCalledWith(expect.objectContaining({ parentUuid: 'p' }))
+  })
+
+  // Review focus #1: a second batch must not replace the first.
+  it('appends a second batch instead of replacing the first', async () => {
+    mockPresignedInit()
+    vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
+    vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
+
+    const store = useUploadStore()
+
+    await store.startUpload({
+      cloudAccountId: 1,
+      parentUuid: null,
+      files: [new File(['a'], 'a.txt')],
+      method: 'direct',
+    })
+
+    await store.startUpload({
+      cloudAccountId: 1,
+      parentUuid: null,
+      files: [new File(['b'], 'b.txt')],
+      method: 'direct',
+    })
+
+    expect(store.uploadQueue).toHaveLength(2)
+    expect(store.uploadQueue.map((i) => i.file.name)).toEqual(['a.txt', 'b.txt'])
+  })
+
+  // Review focus #1: isUploading is derived from the queue, not a toggled ref.
+  it('derives isUploading from the queue', async () => {
+    mockPresignedInit()
+    vi.spyOn(uploadApi, 'uploadDirectToS3').mockResolvedValue()
+    vi.spyOn(uploadApi, 'completePresignedUpload').mockResolvedValue({ status: 'ok', data: mockItem })
+
+    const store = useUploadStore()
+    expect(store.isUploading).toBe(false)
+
+    const promise = store.startUpload({
+      cloudAccountId: 1,
+      parentUuid: null,
+      files: [new File(['c'], 'c.txt')],
+      method: 'direct',
+    })
+    expect(store.isUploading).toBe(true)
+
+    await promise
+    expect(store.isUploading).toBe(false)
   })
 })

@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
 import {
   initiatePresignedUpload,
   completePresignedUpload,
@@ -33,22 +34,40 @@ export interface StartUploadOptions {
   onItemCompleted?: (item: DriveItem) => void
 }
 
-export function useUpload() {
-  const queue = ref<UploadQueueItem[]>([])
-  const isUploading = ref(false)
+// Monotonic per-batch item id. A counter (not Date.now()) guarantees unique ids
+// even when two batches start in the same millisecond, so appending never
+// collides on a `:key`.
+let uploadSeq = 0
+
+/**
+ * Global upload state.
+ *
+ * Lives in a store rather than a per-component composable because the progress
+ * panel is mounted at the app shell (App.vue) and must keep reading the queue
+ * after the upload dialog that started the batch has unmounted.
+ */
+export const useUploadStore = defineStore('upload', () => {
+  const uploadQueue = ref<UploadQueueItem[]>([])
+
+  // Derived, never assigned: with two batches running, a `false` written at the
+  // end of batch A must not clear the flag while batch B is still in flight.
+  const isUploading = computed(() =>
+    uploadQueue.value.some((i) => i.status === 'pending' || i.status === 'uploading'),
+  )
+
   const driveStore = useDriveItemsStore()
   const cloudStore = useCloudAccountsStore()
 
-  function cancelItem(itemId: string) {
-    const item = queue.value.find((i) => i.id === itemId)
+  function cancelItem(itemId: string): void {
+    const item = uploadQueue.value.find((i) => i.id === itemId)
     if (item && item.status === 'uploading') {
       item.abortController?.abort()
       item.status = 'aborted'
     }
   }
 
-  function clearQueue() {
-    queue.value = []
+  function clearQueue(): void {
+    uploadQueue.value = []
   }
 
   async function uploadDirect(
@@ -145,32 +164,36 @@ export function useUpload() {
   }
 
   async function startUpload(options: StartUploadOptions): Promise<DriveItem[]> {
-    isUploading.value = true
     const completedItems: DriveItem[] = []
 
-    queue.value = options.files.map((file, idx) => ({
-      id: `${Date.now()}-${idx}-${file.name}`,
+    // Append this batch instead of replacing the queue, so a second upload runs
+    // alongside a first that is still in flight.
+    const batch: UploadQueueItem[] = options.files.map((file) => ({
+      id: `up-${++uploadSeq}`,
       file,
       relativePath: (file as unknown as { webkitRelativePath?: string }).webkitRelativePath || '',
       progress: 0,
       status: 'pending' as const,
     }))
+    uploadQueue.value = [...uploadQueue.value, ...batch]
+    // Hold reactive references to the newly appended items: `batch` contains
+    // plain objects, and mutating them directly bypasses Vue's reactivity
+    // tracking (the computed `isUploading` would never see the status change).
+    // The slice returns the same proxy objects that live in the ref, so writes
+    // through them — `status`, `progress`, `abortController` — stay reactive.
+    const reactiveBatch = uploadQueue.value.slice(uploadQueue.value.length - batch.length)
 
     // Folder upload: recreate the directory tree before uploading files so a
     // picked folder tree preserves its nested structure instead of flattening
-    // into the current directory. See spec §6.4.
-    const hasTree = queue.value.some((q) => q.relativePath !== '')
-    // Map from directory path (without trailing slash; '' = parent) -> folder uuid.
+    // into the current directory.
+    const hasTree = batch.some((q) => q.relativePath !== '')
     const dirUuidByPath: Record<string, string | null> = { '': options.parentUuid ?? null }
 
     if (hasTree) {
-      // Collect every directory path implied by a file's relativePath, then sort
-      // by depth ascending so parents are created before children.
       const dirPaths = new Set<string>()
-      for (const q of queue.value) {
+      for (const q of batch) {
         const relPath = q.relativePath ?? ''
         const parts = relPath.split('/')
-        // parts[last] is the filename; accumulate every ancestor directory.
         for (let i = 0; i < parts.length - 1; i++) {
           dirPaths.add(parts.slice(0, i + 1).join('/'))
         }
@@ -185,11 +208,7 @@ export function useUpload() {
 
         let uuid: string
         if (parentPath === '') {
-          // Top-level directory: reuse an existing same-named folder in the
-          // current listing, otherwise create (and insert) a new one.
-          const existing = driveStore.items.find(
-            (i) => i.type === 'folder' && i.name === name,
-          )
+          const existing = driveStore.items.find((i) => i.type === 'folder' && i.name === name)
           if (existing) {
             uuid = existing.uuid
           } else {
@@ -197,8 +216,6 @@ export function useUpload() {
             uuid = created.uuid
           }
         } else {
-          // Nested directory: create via the raw API (do NOT insert into the
-          // current listing, which would misplace the sub-folder).
           const res = await createDriveFolder({ cloudAccountId: options.cloudAccountId, parentUuid, name })
           uuid = (res.data as DriveItem).uuid
         }
@@ -206,10 +223,8 @@ export function useUpload() {
       }
     }
 
-    for (const qItem of queue.value) {
+    for (const qItem of reactiveBatch) {
       try {
-        // Resolve the target parent folder for this file. Flat selections
-        // (empty relativePath) upload into the original parent.
         const relPath = qItem.relativePath ?? ''
         const targetParent: string | null = hasTree
           ? (dirUuidByPath[relPath.replace(/\/[^/]*$/, '')] ?? options.parentUuid ?? null)
@@ -230,7 +245,6 @@ export function useUpload() {
       }
     }
 
-    isUploading.value = false
     // Refresh cloud accounts store so storage figures move
     void cloudStore.fetch()
 
@@ -238,10 +252,10 @@ export function useUpload() {
   }
 
   return {
-    uploadQueue: queue,
+    uploadQueue,
     isUploading,
     startUpload,
     cancelItem,
     clearQueue,
   }
-}
+})
