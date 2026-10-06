@@ -70,6 +70,19 @@ export const useUploadStore = defineStore('upload', () => {
     uploadQueue.value = []
   }
 
+  function abortAndClear(): void {
+    // Abort every in-flight upload so its XHR/fetch tears down, then empty the
+    // queue entirely. Used on logout to guarantee no upload from a previous
+    // session outlives the auth state that started it.
+    for (const item of uploadQueue.value) {
+      if (item.status === 'uploading') {
+        item.abortController?.abort()
+        item.status = 'aborted'
+      }
+    }
+    uploadQueue.value = []
+  }
+
   async function uploadDirect(
     queueItem: UploadQueueItem,
     cloudAccountId: number,
@@ -189,60 +202,74 @@ export const useUploadStore = defineStore('upload', () => {
     const hasTree = batch.some((q) => q.relativePath !== '')
     const dirUuidByPath: Record<string, string | null> = { '': options.parentUuid ?? null }
 
-    if (hasTree) {
-      const dirPaths = new Set<string>()
-      for (const q of batch) {
-        const relPath = q.relativePath ?? ''
-        const parts = relPath.split('/')
-        for (let i = 0; i < parts.length - 1; i++) {
-          dirPaths.add(parts.slice(0, i + 1).join('/'))
-        }
-      }
-      const sortedDirs = [...dirPaths].sort((a, b) => a.split('/').length - b.split('/').length)
-
-      for (const dirPath of sortedDirs) {
-        const parts = dirPath.split('/')
-        const name = parts[parts.length - 1]!
-        const parentPath = parts.slice(0, -1).join('/')
-        const parentUuid: string | null = dirUuidByPath[parentPath] ?? options.parentUuid ?? null
-
-        let uuid: string
-        if (parentPath === '') {
-          const existing = driveStore.items.find((i) => i.type === 'folder' && i.name === name)
-          if (existing) {
-            uuid = existing.uuid
-          } else {
-            const created = await driveStore.createFolder(options.cloudAccountId, parentUuid, name)
-            uuid = created.uuid
+    try {
+      if (hasTree) {
+        const dirPaths = new Set<string>()
+        for (const q of batch) {
+          const relPath = q.relativePath ?? ''
+          const parts = relPath.split('/')
+          for (let i = 0; i < parts.length - 1; i++) {
+            dirPaths.add(parts.slice(0, i + 1).join('/'))
           }
-        } else {
-          const res = await createDriveFolder({ cloudAccountId: options.cloudAccountId, parentUuid, name })
-          uuid = (res.data as DriveItem).uuid
         }
-        dirUuidByPath[dirPath] = uuid
-      }
-    }
+        const sortedDirs = [...dirPaths].sort((a, b) => a.split('/').length - b.split('/').length)
 
-    for (const qItem of reactiveBatch) {
-      try {
-        const relPath = qItem.relativePath ?? ''
-        const targetParent: string | null = hasTree
-          ? (dirUuidByPath[relPath.replace(/\/[^/]*$/, '')] ?? options.parentUuid ?? null)
-          : options.parentUuid ?? null
-        let item: DriveItem
-        if (options.method === 'direct') {
-          item = await uploadDirect(qItem, options.cloudAccountId, targetParent)
-        } else {
-          item = await uploadServerMultipart(qItem, options.cloudAccountId, targetParent)
+        for (const dirPath of sortedDirs) {
+          const parts = dirPath.split('/')
+          const name = parts[parts.length - 1]!
+          const parentPath = parts.slice(0, -1).join('/')
+          const parentUuid: string | null = dirUuidByPath[parentPath] ?? options.parentUuid ?? null
+
+          let uuid: string
+          if (parentPath === '') {
+            const existing = driveStore.items.find((i) => i.type === 'folder' && i.name === name)
+            if (existing) {
+              uuid = existing.uuid
+            } else {
+              const created = await driveStore.createFolder(options.cloudAccountId, parentUuid, name)
+              uuid = created.uuid
+            }
+          } else {
+            const res = await createDriveFolder({ cloudAccountId: options.cloudAccountId, parentUuid, name })
+            uuid = (res.data as DriveItem).uuid
+          }
+          dirUuidByPath[dirPath] = uuid
         }
-        completedItems.push(item)
-        options.onItemCompleted?.(item)
-      } catch (e) {
-        if (qItem.status !== 'aborted') {
+      }
+
+      for (const qItem of reactiveBatch) {
+        try {
+          const relPath = qItem.relativePath ?? ''
+          const targetParent: string | null = hasTree
+            ? (dirUuidByPath[relPath.replace(/\/[^/]*$/, '')] ?? options.parentUuid ?? null)
+            : options.parentUuid ?? null
+          let item: DriveItem
+          if (options.method === 'direct') {
+            item = await uploadDirect(qItem, options.cloudAccountId, targetParent)
+          } else {
+            item = await uploadServerMultipart(qItem, options.cloudAccountId, targetParent)
+          }
+          completedItems.push(item)
+          options.onItemCompleted?.(item)
+        } catch (e) {
+          if (qItem.status !== 'aborted') {
+            qItem.status = 'failed'
+            qItem.error = e instanceof Error ? e.message : String(e)
+          }
+        }
+      }
+    } catch (e) {
+      // The folder-tree walk rejected before the per-item loop. Settle every
+      // item still `pending` so the panel does not strand the batch and the
+      // close button stays enabled. Items already completed/failed/aborted
+      // are left untouched.
+      for (const qItem of reactiveBatch) {
+        if (qItem.status === 'pending') {
           qItem.status = 'failed'
           qItem.error = e instanceof Error ? e.message : String(e)
         }
       }
+      throw e
     }
 
     // Refresh cloud accounts store so storage figures move
@@ -257,5 +284,6 @@ export const useUploadStore = defineStore('upload', () => {
     startUpload,
     cancelItem,
     clearQueue,
+    abortAndClear,
   }
 })

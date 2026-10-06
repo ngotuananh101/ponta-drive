@@ -421,4 +421,33 @@ describe('upload store', () => {
     await promise
     expect(store.isUploading).toBe(false)
   })
+
+  // Review focus #1: a folder-tree walk failure must settle every item instead
+  // of stranding them in `pending` forever.
+  it('settles all items as failed when folder-tree walk rejects', async () => {
+    const createFolderSpy = vi
+      .spyOn(driveItemsApi, 'createDriveFolder')
+      .mockRejectedValue(new Error('Folder creation failed'))
+
+    const store = useUploadStore()
+
+    const file = new File(['content'], 'a.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'photos/2024/a.jpg' })
+
+    const promise = store.startUpload({
+      cloudAccountId: 1,
+      parentUuid: null,
+      files: [file],
+      method: 'direct',
+    })
+
+    await expect(promise).rejects.toThrow('Folder creation failed')
+
+    // Every item left in `reactiveBatch` must be settled — no `pending` remains.
+    expect(store.uploadQueue).toHaveLength(1)
+    expect(store.uploadQueue[0]?.status).toBe('failed')
+    expect(store.uploadQueue[0]?.error).toContain('Folder creation failed')
+    expect(createFolderSpy).toHaveBeenCalled()
+    expect(store.isUploading).toBe(false)
+  })
 })

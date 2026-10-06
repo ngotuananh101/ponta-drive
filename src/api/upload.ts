@@ -239,7 +239,8 @@ export function uploadMultipartChunk(
 }
 
 /**
- * Alias for `uploadMultipartChunk` to match the brief's naming convention
- * (used by Task 9's `useUpload.ts`).
+ * Alias for `uploadMultipartChunk`, kept as `uploadMultipartPart` so call-site
+ * naming reads naturally (a single "part", not "chunk"). The implementation
+ * is identical; only the exported name differs.
  */
 export const uploadMultipartPart = uploadMultipartChunk

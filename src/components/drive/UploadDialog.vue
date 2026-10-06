@@ -75,12 +75,17 @@ function handleStart() {
   // Close first so the dialog disappears at once; the store keeps the upload
   // alive and the global panel shows its progress.
   open.value = false
-  void uploadStore.startUpload({
-    cloudAccountId: props.cloudAccountId,
-    parentUuid: props.parentUuid,
-    files: selectedFiles.value,
-    method: uploadMethod.value,
-  })
+  void uploadStore
+    .startUpload({
+      cloudAccountId: props.cloudAccountId,
+      parentUuid: props.parentUuid,
+      files: selectedFiles.value,
+      method: uploadMethod.value,
+    })
+    // The store already settles every queued item's status on rejection
+    // (folder-tree walk or per-file), so the panel renders per-item state.
+    // Swallowing here prevents an unhandled rejection from surfacing.
+    .catch(() => {})
 }
 </script>
 
