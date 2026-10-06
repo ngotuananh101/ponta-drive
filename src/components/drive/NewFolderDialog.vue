@@ -21,7 +21,7 @@ import type { DriveItem } from '@/api/driveItems'
 const open = defineModel<boolean>('open', { required: true })
 
 const props = defineProps<{
-  cloudAccountUuid: string
+  cloudAccountId: number
   parentUuid?: string | null
 }>()
 
@@ -45,13 +45,13 @@ watch(open, (isOpen) => {
 
 async function submit() {
   const trimmed = folderName.value.trim()
-  if (!trimmed || !props.cloudAccountUuid) return
+  if (!trimmed || !props.cloudAccountId) return
 
   creating.value = true
   error.value = null
 
   try {
-    const item = await store.createFolder(props.cloudAccountUuid, props.parentUuid ?? null, trimmed)
+    const item = await store.createFolder(props.cloudAccountId, props.parentUuid ?? null, trimmed)
     toast.success(t('drive.toast_folder_created'))
     open.value = false
     emit('created', item)

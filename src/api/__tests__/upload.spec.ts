@@ -19,7 +19,7 @@ describe('upload API endpoints', () => {
   it('initiatePresignedUpload posts correct payload', async () => {
     const spy = vi.spyOn(client, 'fetchApi').mockResolvedValue({ status: 'ok' })
     await initiatePresignedUpload({
-      cloudAccountUuid: 'c-1',
+      cloudAccountId: 1,
       fileName: 'photo.jpg',
       size: 2048,
       mimeType: 'image/jpeg',
@@ -28,7 +28,7 @@ describe('upload API endpoints', () => {
     expect(spy).toHaveBeenCalledWith('/v1/drive/upload/presigned', {
       method: 'POST',
       body: JSON.stringify({
-        cloud_account_uuid: 'c-1',
+        cloud_account_id: 1,
         file_name: 'photo.jpg',
         size: 2048,
         mime_type: 'image/jpeg',
@@ -50,7 +50,7 @@ describe('upload API endpoints', () => {
     const spy = vi.spyOn(client, 'fetchApi').mockResolvedValue({ status: 'ok' })
 
     await initiateMultipartUpload({
-      cloudAccountUuid: 'c-1',
+      cloudAccountId: 1,
       fileName: 'video.mp4',
       size: 10485760,
       mimeType: 'video/mp4',

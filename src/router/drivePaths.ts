@@ -1,16 +1,17 @@
 import type { RouteLocationRaw } from 'vue-router'
 
 /**
- * Builds the drive URL from uuids only. The URL is the source of truth for the
- * open folder, so every navigation site (sidebar, home cards, breadcrumb) goes
- * through here and produces the same shape.
+ * Builds the drive URL from the numeric cloud account id and an optional folder
+ * uuid. The URL is the source of truth for the open folder, so every navigation
+ * site (sidebar, home cards, breadcrumb) goes through here and produces the
+ * same shape.
  */
-export function drivePath(cloudUuid: string, folderUuid?: string | null): string {
-  return folderUuid ? `/c/${cloudUuid}/f/${folderUuid}` : `/c/${cloudUuid}`
+export function drivePath(cloudId: number, folderUuid?: string | null): string {
+  return folderUuid ? `/d/${cloudId}/f/${folderUuid}` : `/d/${cloudId}`
 }
 
-export function driveLocation(cloudUuid: string, folderUuid?: string | null): RouteLocationRaw {
+export function driveLocation(cloudId: number, folderUuid?: string | null): RouteLocationRaw {
   return folderUuid
-    ? { name: 'drive-folder', params: { cloudUuid, folderUuid } }
-    : { name: 'drive', params: { cloudUuid } }
+    ? { name: 'drive-folder', params: { cloudId, folderUuid } }
+    : { name: 'drive', params: { cloudId } }
 }

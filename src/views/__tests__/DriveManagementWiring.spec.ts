@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createMemoryHistory } from 'vue-router'
 
 import DriveView from '../DriveView.vue'
+import { makeDriveRouter } from '@/test/driveRoutes'
 import { useDriveActionsStore } from '@/stores/driveActions'
 import { useDriveSearchStore } from '@/stores/driveSearch'
 import { useAuthStore } from '@/stores/auth'
@@ -14,7 +14,7 @@ import type { DriveItem } from '@/api/driveItems'
 import viLocale from '@/locales/vi.json'
 
 const CLOUD = {
-  uuid: 'c-1',
+  id: 1,
   name: 'Storage Cloud',
   provider: 's3',
   credentials: null,
@@ -33,13 +33,13 @@ const ITEM: DriveItem = {
   mime_type: 'application/pdf',
   size: 1000,
   extension: 'pdf',
-  cloud_account_uuid: 'c-1',
+  cloud_account_id: 1,
   is_starred: false,
   status: 'ready',
   updated_at: '2026-10-04 00:00:00',
 }
 
-/** Mocks the APIs DriveView fetches on mount and mounts it at `/c/c-1`. */
+/** Mocks the APIs DriveView fetches on mount and mounts it at `/d/1`. */
 async function mountDriveView(items: DriveItem[] = []) {
   vi.spyOn(cloudApi, 'listCloudAccounts').mockResolvedValue({ status: 'ok', data: [CLOUD] })
   vi.spyOn(driveApi, 'listDriveItems').mockResolvedValue({
@@ -60,11 +60,8 @@ async function mountDriveView(items: DriveItem[] = []) {
     avatar: '',
   }
 
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/c/:cloudUuid', name: 'drive', component: DriveView, props: true }],
-  })
-  await router.push('/c/c-1')
+  const router = makeDriveRouter(DriveView)
+  await router.push('/d/1')
   await router.isReady()
 
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
@@ -73,7 +70,7 @@ async function mountDriveView(items: DriveItem[] = []) {
       plugins: [router, i18n],
       stubs: { DashboardLayout: { template: '<div><slot /></div>' }, SyncCloudButton: true },
     },
-    props: { cloudUuid: 'c-1' },
+    props: { cloudId: '1' },
     attachTo: document.body,
   })
 }

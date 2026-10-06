@@ -8,7 +8,8 @@ export interface DriveItem {
   mime_type: string
   size: number
   extension: string
-  cloud_account_uuid: string
+  /** Numeric id of the cloud account this item belongs to. */
+  cloud_account_id: number
   is_starred: boolean
   status: string
   updated_at: string
@@ -24,7 +25,7 @@ export interface DriveListResponse extends ApiResponse<DriveItem[]> {
 }
 
 export interface DriveListParams {
-  cloudAccountUuid: string
+  cloudAccountId: number
   parentUuid?: string | null
   search?: string
   type?: string
@@ -43,7 +44,7 @@ export interface DriveListParams {
  */
 export function buildDriveItemsQuery(params: DriveListParams): string {
   const query = new URLSearchParams()
-  query.set('cloud_account_uuid', params.cloudAccountUuid)
+  query.set('cloud_account_id', String(params.cloudAccountId))
   if (params.parentUuid) query.set('parent_uuid', params.parentUuid)
   if (params.search) query.set('search', params.search)
   if (params.type) query.set('type', params.type)
@@ -85,7 +86,7 @@ export async function getDriveItemBreadcrumb(
 }
 
 export interface CreateFolderPayload {
-  cloudAccountUuid: string
+  cloudAccountId: number
   parentUuid?: string | null
   name: string
 }
@@ -93,8 +94,8 @@ export interface CreateFolderPayload {
 export async function createDriveFolder(
   payload: CreateFolderPayload,
 ): Promise<ApiResponse<DriveItem>> {
-  const body: Record<string, string> = {
-    cloud_account_uuid: payload.cloudAccountUuid,
+  const body: Record<string, string | number> = {
+    cloud_account_id: payload.cloudAccountId,
   }
   if (payload.parentUuid) {
     body.parent_uuid = payload.parentUuid

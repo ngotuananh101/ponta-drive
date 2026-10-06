@@ -10,8 +10,8 @@ export interface Activity {
   action: string
   target_name: string
   target_uuid: string | null
-  cloud_id: number | null
-  cloud_account_uuid: string | null
+  /** Numeric id of the cloud account the action touched, null when absent. */
+  cloud_account_id: number | null
   ip_address: string
   user_agent: string
   /** Action-specific payload (e.g. `{ items_count: 12 }`), null when absent. */

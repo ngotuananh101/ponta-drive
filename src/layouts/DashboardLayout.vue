@@ -61,52 +61,53 @@ const driveSearch = useDriveSearchStore()
 const { accounts: cloudAccounts, loading: cloudLoading, error: cloudError } = storeToRefs(cloudStore)
 const { sync } = useCloudSync()
 
-const activeCloudUuid = computed(() => (route.params.cloudUuid as string) || '')
+// The account id in the URL is a string segment; compare it as a number.
+const activeCloudId = computed(() => Number(route.params.cloudId) || 0)
 
 const isAddCloudOpen = ref(false)
-/** uuid being edited; drives the AddCloudDialog's edit mode. */
-const editCloudUuid = ref<string | null>(null)
-/** uuid pending deletion; also drives the delete confirmation's open state. */
-const deleteCloudUuid = ref<string | null>(null)
+/** Account id being edited; drives the AddCloudDialog's edit mode. */
+const editCloudId = ref<number | null>(null)
+/** Account id pending deletion; also drives the delete confirmation's open state. */
+const deleteCloudId = ref<number | null>(null)
 const deleteCloudName = ref('')
 
 const isDeleteCloudOpen = computed({
-  get: () => deleteCloudUuid.value !== null,
+  get: () => deleteCloudId.value !== null,
   set: (open: boolean) => {
-    if (!open) deleteCloudUuid.value = null
+    if (!open) deleteCloudId.value = null
   },
 })
 
 function handleEditCloud(cloud: CloudAccount) {
-  editCloudUuid.value = cloud.uuid
+  editCloudId.value = cloud.id
   isAddCloudOpen.value = true
 }
 
 function handleDeleteCloud(cloud: CloudAccount) {
   deleteCloudName.value = cloud.name
-  deleteCloudUuid.value = cloud.uuid
+  deleteCloudId.value = cloud.id
 }
 
-async function handleSetDefault(uuid: string) {
+async function handleSetDefault(id: number) {
   try {
-    await cloudStore.setDefault(uuid)
+    await cloudStore.setDefault(id)
     toast.success(t('cloud.set_default_success'))
   } catch (e) {
     toast.error(e instanceof Error ? e.message : String(e))
   }
 }
 
-// Opening the dialog for a create must not inherit the uuid left over from a
+// Opening the dialog for a create must not inherit the id left over from a
 // previous edit, or the create form would open prefilled and call `update`.
 function handleAddCloud() {
-  editCloudUuid.value = null
+  editCloudId.value = null
   isAddCloudOpen.value = true
 }
 
 // The account whose drive is currently open, if any. Its storage figures feed
-// the sidebar widget; `null` (e.g. an unknown uuid) falls back to zeros.
+// the sidebar widget; `null` (e.g. an unknown id) falls back to zeros.
 const activeCloud = computed(
-  () => cloudAccounts.value.find((a) => a.uuid === activeCloudUuid.value) ?? null,
+  () => cloudAccounts.value.find((a) => a.id === activeCloudId.value) ?? null,
 )
 
 // Percentage used, clamped to [0, 100] so a backend that reports `used` above
@@ -155,26 +156,26 @@ function onNavClick(itemId: string) {
 function onSelectMyDrive() {
   isMyDriveOpen.value = true
   isMobileMenuOpen.value = false
-  // An account without a uuid cannot build a drive URL; `driveLocation` would
-  // throw on the empty param and the click would silently do nothing. Fall back
-  // to the first account that actually has one.
-  const first = cloudAccounts.value.find((account) => account.uuid)
+  // An account without an id cannot build a drive URL; `driveLocation` would
+  // throw on the missing param and the click would silently do nothing. Fall
+  // back to the first account that actually has one.
+  const first = cloudAccounts.value.find((account) => account.id)
   if (first) {
-    router.push(driveLocation(first.uuid))
+    router.push(driveLocation(first.id))
   } else {
     router.push({ name: 'home' })
   }
 }
 
-function onSelectCloud(uuid: string) {
+function onSelectCloud(id: number) {
   isMobileMenuOpen.value = false
-  // Guard the same way: a missing uuid must not become an unhandled
+  // Guard the same way: a missing id must not become an unhandled
   // "Missing required param" error from `router.push`.
-  if (!uuid) {
+  if (!id) {
     router.push({ name: 'home' })
     return
   }
-  router.push(driveLocation(uuid))
+  router.push(driveLocation(id))
 }
 
 async function handleLogout() {
@@ -336,10 +337,10 @@ async function handleLogout() {
                      visible while a sync is running so the spinner is seen. -->
                 <div
                   v-for="cloud in cloudAccounts"
-                  :key="cloud.uuid"
+                  :key="cloud.id"
                   class="group w-full flex items-center gap-1 rounded-lg pr-1 transition-colors"
                   :class="[
-                    activeCloudUuid === cloud.uuid && activeNav === 'my_drive'
+                    activeCloudId === cloud.id && activeNav === 'my_drive'
                       ? 'bg-primary/10 shadow-2xs'
                       : 'hover:bg-accent/50',
                   ]"
@@ -348,11 +349,11 @@ async function handleLogout() {
                     type="button"
                     class="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                     :class="[
-                      activeCloudUuid === cloud.uuid && activeNav === 'my_drive'
+                      activeCloudId === cloud.id && activeNav === 'my_drive'
                         ? 'text-primary font-semibold'
                         : 'text-muted-foreground group-hover:text-foreground',
                     ]"
-                    @click="onSelectCloud(cloud.uuid)"
+                    @click="onSelectCloud(cloud.id)"
                   >
                     <component
                       :is="providerMeta(cloud.provider).icon"
@@ -374,7 +375,7 @@ async function handleLogout() {
                         type="button"
                         class="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all cursor-pointer shrink-0"
                         :class="
-                          cloudStore.isSyncing(cloud.uuid)
+                          cloudStore.isSyncing(cloud.id)
                             ? 'opacity-100'
                             : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
                         "
@@ -382,7 +383,7 @@ async function handleLogout() {
                         @click.stop
                       >
                         <RefreshCw
-                          v-if="cloudStore.isSyncing(cloud.uuid)"
+                          v-if="cloudStore.isSyncing(cloud.id)"
                           class="h-3.5 w-3.5 animate-spin"
                         />
                         <MoreVertical v-else class="h-3.5 w-3.5" />
@@ -392,8 +393,8 @@ async function handleLogout() {
                     <DropdownMenuContent align="end" class="w-48 p-1.5 shadow-xl border-border">
                       <DropdownMenuItem
                         class="cursor-pointer py-2 px-3 gap-2.5 rounded-lg text-sm"
-                        :disabled="cloudStore.isSyncing(cloud.uuid)"
-                        @click="sync(cloud.uuid)"
+                        :disabled="cloudStore.isSyncing(cloud.id)"
+                        @click="sync(cloud.id)"
                       >
                         <RefreshCw class="h-4 w-4" />
                         <span>{{ t('cloud.sync') }}</span>
@@ -408,7 +409,7 @@ async function handleLogout() {
                       <DropdownMenuItem
                         class="cursor-pointer py-2 px-3 gap-2.5 rounded-lg text-sm"
                         :disabled="cloud.is_default"
-                        @click="handleSetDefault(cloud.uuid)"
+                        @click="handleSetDefault(cloud.id)"
                       >
                         <Star class="h-4 w-4" />
                         <span>{{ t('cloud.menu_set_default') }}</span>
@@ -599,10 +600,10 @@ async function handleLogout() {
     </div>
   </div>
 
-  <AddCloudDialog v-model:open="isAddCloudOpen" :edit-uuid="editCloudUuid" />
+  <AddCloudDialog v-model:open="isAddCloudOpen" :edit-id="editCloudId" />
   <DeleteCloudDialog
     v-model:open="isDeleteCloudOpen"
-    :account-uuid="deleteCloudUuid"
+    :account-id="deleteCloudId"
     :account-name="deleteCloudName"
   />
 </template>
