@@ -2,7 +2,7 @@ import { fetchApi, type ApiResponse } from './client'
 import type { DriveItem } from './driveItems'
 
 export interface PresignedUploadInitPayload {
-  cloudAccountUuid: string
+  cloudAccountId: number
   parentUuid?: string | null
   fileName: string
   size: number
@@ -22,7 +22,7 @@ export async function initiatePresignedUpload(
   payload: PresignedUploadInitPayload,
 ): Promise<ApiResponse<PresignedUploadInitResponse>> {
   const body: Record<string, unknown> = {
-    cloud_account_uuid: payload.cloudAccountUuid,
+    cloud_account_id: payload.cloudAccountId,
     file_name: payload.fileName,
     size: payload.size,
     mime_type: payload.mimeType,
@@ -45,7 +45,7 @@ export async function completePresignedUpload(
 }
 
 export interface MultipartUploadInitPayload {
-  cloudAccountUuid: string
+  cloudAccountId: number
   parentUuid?: string | null
   fileName: string
   size: number
@@ -65,7 +65,7 @@ export async function initiateMultipartUpload(
   payload: MultipartUploadInitPayload,
 ): Promise<ApiResponse<MultipartUploadInitResponse>> {
   const body: Record<string, unknown> = {
-    cloud_account_uuid: payload.cloudAccountUuid,
+    cloud_account_id: payload.cloudAccountId,
     file_name: payload.fileName,
     size: payload.size,
     mime_type: payload.mimeType,

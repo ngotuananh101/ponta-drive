@@ -12,7 +12,7 @@ function item(partial: Partial<DriveItem>): DriveItem {
     mime_type: '',
     size: 0,
     extension: '',
-    cloud_account_uuid: 'acc-1',
+    cloud_account_id: 1,
     is_starred: false,
     status: 'ready',
     updated_at: '2026-10-01 00:00:00',

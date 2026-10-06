@@ -42,18 +42,18 @@ export const useCloudAccountsStore = defineStore('cloudAccounts', () => {
    * set the instant the button is pressed, so the spinner appears immediately
    * and every view can disable its button without waiting for a round trip.
    */
-  const syncingIds = ref<Set<string>>(new Set())
+  const syncingIds = ref<Set<number>>(new Set())
 
-  function isSyncing(uuid: string): boolean {
-    return syncingIds.value.has(uuid)
+  function isSyncing(id: number): boolean {
+    return syncingIds.value.has(id)
   }
 
-  function setSyncing(uuid: string, on: boolean): void {
+  function setSyncing(id: number, on: boolean): void {
     const next = new Set(syncingIds.value)
     if (on) {
-      next.add(uuid)
+      next.add(id)
     } else {
-      next.delete(uuid)
+      next.delete(id)
     }
     // A Set is mutated in place; assigning a new one is what triggers Vue's
     // reactivity for `syncingIds`.
@@ -80,15 +80,15 @@ export const useCloudAccountsStore = defineStore('cloudAccounts', () => {
     return created
   }
 
-  async function update(uuid: string, payload: Partial<CloudAccountPayload>): Promise<void> {
-    const res = await updateCloudAccount(uuid, payload)
+  async function update(id: number, payload: Partial<CloudAccountPayload>): Promise<void> {
+    const res = await updateCloudAccount(id, payload)
     const updated = res.data as CloudAccount
-    accounts.value = accounts.value.map((a) => (a.uuid === uuid ? updated : a))
+    accounts.value = accounts.value.map((a) => (a.id === id ? updated : a))
   }
 
-  async function remove(uuid: string): Promise<void> {
-    await deleteCloudAccount(uuid)
-    accounts.value = accounts.value.filter((a) => a.uuid !== uuid)
+  async function remove(id: number): Promise<void> {
+    await deleteCloudAccount(id)
+    accounts.value = accounts.value.filter((a) => a.id !== id)
   }
 
   /**
@@ -96,11 +96,11 @@ export const useCloudAccountsStore = defineStore('cloudAccounts', () => {
    * user's other accounts in the same update, so the local list is updated the
    * same way rather than refetching to discover it.
    */
-  async function setDefault(uuid: string): Promise<void> {
-    const res = await updateCloudAccount(uuid, { is_default: true })
+  async function setDefault(id: number): Promise<void> {
+    const res = await updateCloudAccount(id, { is_default: true })
     const updated = res.data as CloudAccount
     accounts.value = accounts.value.map((a) =>
-      a.uuid === uuid ? updated : { ...a, is_default: false },
+      a.id === id ? updated : { ...a, is_default: false },
     )
   }
 
@@ -113,7 +113,7 @@ export const useCloudAccountsStore = defineStore('cloudAccounts', () => {
    * already finished by the time the request returned, so waiting a full
    * interval before the first fetch would show a needless spinner.
    */
-  async function pollUntilSettled(uuid: string): Promise<void> {
+  async function pollUntilSettled(id: number): Promise<void> {
     for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
       if (attempt > 0) {
         await sleep(SYNC_POLL_INTERVAL_MS)
@@ -127,12 +127,12 @@ export const useCloudAccountsStore = defineStore('cloudAccounts', () => {
       // Only a *confirmed* non-syncing status ends the loop. A missing account
       // means the refetch failed (the list is stale or empty), not that the
       // sync finished, so keep polling - the attempt bound stops it either way.
-      const current = accounts.value.find((a) => a.uuid === uuid)
+      const current = accounts.value.find((a) => a.id === id)
       if (current && current.sync_status !== 'syncing') {
         break
       }
     }
-    setSyncing(uuid, false)
+    setSyncing(id, false)
   }
 
   /**
@@ -141,20 +141,20 @@ export const useCloudAccountsStore = defineStore('cloudAccounts', () => {
    * scan finishes), so the account is shown as syncing and the list is polled
    * until `sync_status` settles.
    */
-  async function sync(uuid: string): Promise<void> {
-    setSyncing(uuid, true)
+  async function sync(id: number): Promise<void> {
+    setSyncing(id, true)
     // Reflect the queued state immediately so a view that reads the account
-    // rather than `isSyncing(uuid)` shows the spinner too.
+    // rather than `isSyncing(id)` shows the spinner too.
     accounts.value = accounts.value.map((a) =>
-      a.uuid === uuid ? { ...a, sync_status: 'syncing' as const } : a,
+      a.id === id ? { ...a, sync_status: 'syncing' as const } : a,
     )
     try {
-      await syncCloudAccount(uuid)
+      await syncCloudAccount(id)
     } catch (e) {
-      setSyncing(uuid, false)
+      setSyncing(id, false)
       throw e
     }
-    await pollUntilSettled(uuid)
+    await pollUntilSettled(id)
   }
 
   return {

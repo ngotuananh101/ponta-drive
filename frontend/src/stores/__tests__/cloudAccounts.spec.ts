@@ -8,7 +8,7 @@ import type { CloudAccount } from '@/api/cloudAccounts'
 
 function account(overrides: Partial<CloudAccount> = {}): CloudAccount {
   return {
-    uuid: 'acc-1',
+    id: 1,
     name: 'MinIO Local',
     provider: 'minio',
     credentials: null,
@@ -63,7 +63,7 @@ describe('cloudAccounts store', () => {
   it('appends a created account without refetching', async () => {
     vi.spyOn(api, 'createCloudAccount').mockResolvedValue({
       status: 'ok',
-      data: account({ uuid: 'acc-9', name: 'New Cloud' }),
+      data: account({ id: 9, name: 'New Cloud' }),
     })
 
     const store = useCloudAccountsStore()
@@ -79,43 +79,43 @@ describe('cloudAccounts store', () => {
       public_url: '',
     })
 
-    expect(store.accounts.map((a) => a.uuid)).toEqual(['acc-9'])
+    expect(store.accounts.map((a) => a.id)).toEqual([9])
   })
 
   it('replaces the edited account in place', async () => {
     vi.spyOn(api, 'listCloudAccounts').mockResolvedValue({
       status: 'ok',
-      data: [account({ uuid: 'acc-1', name: 'Before' }), account({ uuid: 'acc-2', name: 'Other' })],
+      data: [account({ id: 1, name: 'Before' }), account({ id: 2, name: 'Other' })],
     })
     vi.spyOn(api, 'updateCloudAccount').mockResolvedValue({
       status: 'ok',
-      data: account({ uuid: 'acc-1', name: 'After' }),
+      data: account({ id: 1, name: 'After' }),
     })
 
     const store = useCloudAccountsStore()
     await store.fetch()
-    await store.update('acc-1', { name: 'After' })
+    await store.update(1, { name: 'After' })
 
     // The order must survive: replacing the list with the single returned
     // account would silently drop every other row from the sidebar.
-    expect(store.accounts.map((a) => [a.uuid, a.name])).toEqual([
-      ['acc-1', 'After'],
-      ['acc-2', 'Other'],
+    expect(store.accounts.map((a) => [a.id, a.name])).toEqual([
+      [1, 'After'],
+      [2, 'Other'],
     ])
   })
 
   it('drops a removed account from the list', async () => {
     vi.spyOn(api, 'listCloudAccounts').mockResolvedValue({
       status: 'ok',
-      data: [account({ uuid: 'acc-1' }), account({ uuid: 'acc-2' })],
+      data: [account({ id: 1 }), account({ id: 2 })],
     })
     vi.spyOn(api, 'deleteCloudAccount').mockResolvedValue({ status: 'ok' })
 
     const store = useCloudAccountsStore()
     await store.fetch()
-    await store.remove('acc-1')
+    await store.remove(1)
 
-    expect(store.accounts.map((a) => a.uuid)).toEqual(['acc-2'])
+    expect(store.accounts.map((a) => a.id)).toEqual([2])
   })
 
   // The backend clears is_default on every other account when one is marked
@@ -123,20 +123,20 @@ describe('cloudAccounts store', () => {
   it('moves the default flag to the chosen account and off the others', async () => {
     vi.spyOn(api, 'listCloudAccounts').mockResolvedValue({
       status: 'ok',
-      data: [account({ uuid: 'acc-1', is_default: true }), account({ uuid: 'acc-2', is_default: false })],
+      data: [account({ id: 1, is_default: true }), account({ id: 2, is_default: false })],
     })
     vi.spyOn(api, 'updateCloudAccount').mockResolvedValue({
       status: 'ok',
-      data: account({ uuid: 'acc-2', is_default: true }),
+      data: account({ id: 2, is_default: true }),
     })
 
     const store = useCloudAccountsStore()
     await store.fetch()
-    await store.setDefault('acc-2')
+    await store.setDefault(2)
 
-    expect(store.accounts.map((a) => [a.uuid, a.is_default])).toEqual([
-      ['acc-1', false],
-      ['acc-2', true],
+    expect(store.accounts.map((a) => [a.id, a.is_default])).toEqual([
+      [1, false],
+      [2, true],
     ])
   })
 })
@@ -150,31 +150,31 @@ describe('cloudAccounts store sync', () => {
     vi.spyOn(api, 'syncCloudAccount').mockReturnValue(pending)
     vi.spyOn(api, 'listCloudAccounts').mockResolvedValue({
       status: 'ok',
-      data: [account({ uuid: 'acc-3', sync_status: 'idle' })],
+      data: [account({ id: 3, sync_status: 'idle' })],
     })
 
     const store = useCloudAccountsStore()
-    const done = store.sync('acc-3')
+    const done = store.sync(3)
 
     // The button must show the spinner the instant it is pressed, before the
     // request resolves - that is the whole point of the local flag.
-    expect(store.isSyncing('acc-3')).toBe(true)
+    expect(store.isSyncing(3)).toBe(true)
 
     release()
     await done
 
-    expect(store.isSyncing('acc-3')).toBe(false)
+    expect(store.isSyncing(3)).toBe(false)
   })
 
   it('refetches until the account leaves the syncing state', async () => {
     vi.spyOn(api, 'syncCloudAccount').mockResolvedValue({ status: 'ok' })
     vi.spyOn(api, 'listCloudAccounts')
-      .mockResolvedValueOnce({ status: 'ok', data: [account({ uuid: 'acc-4', sync_status: 'syncing' })] })
-      .mockResolvedValueOnce({ status: 'ok', data: [account({ uuid: 'acc-4', sync_status: 'idle' })] })
+      .mockResolvedValueOnce({ status: 'ok', data: [account({ id: 4, sync_status: 'syncing' })] })
+      .mockResolvedValueOnce({ status: 'ok', data: [account({ id: 4, sync_status: 'idle' })] })
 
     vi.useFakeTimers()
     const store = useCloudAccountsStore()
-    const done = store.sync('acc-4')
+    const done = store.sync(4)
 
     // First check is immediate (the sync driver may have finished already),
     // sees "syncing", then waits an interval before the next poll.
@@ -182,7 +182,7 @@ describe('cloudAccounts store sync', () => {
     await vi.advanceTimersByTimeAsync(3000)
     await done
 
-    expect(store.isSyncing('acc-4')).toBe(false)
+    expect(store.isSyncing(4)).toBe(false)
     expect(store.accounts[0]?.sync_status).toBe('idle')
   })
 
@@ -191,27 +191,27 @@ describe('cloudAccounts store sync', () => {
     // Never settles: a worker that died must not spin the UI forever.
     const listSpy = vi.spyOn(api, 'listCloudAccounts').mockResolvedValue({
       status: 'ok',
-      data: [account({ uuid: 'acc-5', sync_status: 'syncing' })],
+      data: [account({ id: 5, sync_status: 'syncing' })],
     })
 
     vi.useFakeTimers()
     const store = useCloudAccountsStore()
-    const done = store.sync('acc-5')
+    const done = store.sync(5)
 
     await vi.advanceTimersByTimeAsync(3000 * 10 + 100)
     await done
 
     expect(listSpy.mock.calls.length).toBeLessThanOrEqual(10)
-    expect(store.isSyncing('acc-5')).toBe(false)
+    expect(store.isSyncing(5)).toBe(false)
   })
 
   it('clears the syncing flag and rethrows when the sync request fails', async () => {
     vi.spyOn(api, 'syncCloudAccount').mockRejectedValue(new Error('boom'))
 
     const store = useCloudAccountsStore()
-    await expect(store.sync('acc-6')).rejects.toThrow('boom')
+    await expect(store.sync(6)).rejects.toThrow('boom')
 
-    expect(store.isSyncing('acc-6')).toBe(false)
+    expect(store.isSyncing(6)).toBe(false)
   })
 
   // A transient list failure mid-poll must not strand the account: the loop
@@ -220,17 +220,17 @@ describe('cloudAccounts store sync', () => {
     vi.spyOn(api, 'syncCloudAccount').mockResolvedValue({ status: 'ok' })
     vi.spyOn(api, 'listCloudAccounts')
       .mockRejectedValueOnce(new Error('network blip'))
-      .mockResolvedValueOnce({ status: 'ok', data: [account({ uuid: 'acc-7', sync_status: 'idle' })] })
+      .mockResolvedValueOnce({ status: 'ok', data: [account({ id: 7, sync_status: 'idle' })] })
 
     vi.useFakeTimers()
     const store = useCloudAccountsStore()
-    const done = store.sync('acc-7')
+    const done = store.sync(7)
 
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(3000)
     await done
 
-    expect(store.isSyncing('acc-7')).toBe(false)
+    expect(store.isSyncing(7)).toBe(false)
   })
 })
 
@@ -274,7 +274,7 @@ describe('ApiError', () => {
   // sent. A store that stored the request body would put the secret in memory
   // and into every later `accounts` read.
   it('stores the sanitized response, not the payload it sent', async () => {
-    const created = account({ uuid: 'acc-7', name: 'R2 Prod' })
+    const created = account({ id: 7, name: 'R2 Prod' })
     vi.spyOn(api, 'createCloudAccount').mockResolvedValue({ status: 'ok', data: created })
 
     const store = useCloudAccountsStore()

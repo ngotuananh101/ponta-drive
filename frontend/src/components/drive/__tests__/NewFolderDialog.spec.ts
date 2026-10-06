@@ -6,7 +6,7 @@ import NewFolderDialog from '../NewFolderDialog.vue'
 import { useDriveItemsStore } from '@/stores/driveItems'
 import viLocale from '@/locales/vi.json'
 
-function mountDialog(props: { cloudAccountUuid: string; parentUuid?: string | null }) {
+function mountDialog(props: { cloudAccountId: number; parentUuid?: string | null }) {
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
   return mount(NewFolderDialog, {
     props: { open: true, ...props },
@@ -22,7 +22,7 @@ describe('NewFolderDialog', () => {
   })
 
   it('renders dialog title and input', async () => {
-    mountDialog({ cloudAccountUuid: 'cloud-1' })
+    mountDialog({ cloudAccountId: 1 })
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.new_folder_title))
     const input = document.querySelector<HTMLInputElement>('input')
     expect(input).not.toBeNull()
@@ -37,13 +37,13 @@ describe('NewFolderDialog', () => {
       mime_type: '',
       size: 0,
       extension: '',
-      cloud_account_uuid: 'cloud-1',
+      cloud_account_id: 1,
       is_starred: false,
       status: 'ready',
       updated_at: '2026-10-04 00:00:00',
     })
 
-    const wrapper = mountDialog({ cloudAccountUuid: 'cloud-1', parentUuid: null })
+    const wrapper = mountDialog({ cloudAccountId: 1, parentUuid: null })
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.new_folder_title))
 
     const input = document.querySelector<HTMLInputElement>('input')!
@@ -56,7 +56,7 @@ describe('NewFolderDialog', () => {
     )!
     button.click()
 
-    await vi.waitFor(() => expect(createSpy).toHaveBeenCalledWith('cloud-1', null, 'Project Photos'))
+    await vi.waitFor(() => expect(createSpy).toHaveBeenCalledWith(1, null, 'Project Photos'))
     expect(wrapper.emitted('created')).toBeTruthy()
   })
 
@@ -64,7 +64,7 @@ describe('NewFolderDialog', () => {
     const store = useDriveItemsStore()
     vi.spyOn(store, 'createFolder').mockRejectedValue(new Error('Failed to fetch'))
 
-    mountDialog({ cloudAccountUuid: 'cloud-1', parentUuid: null })
+    mountDialog({ cloudAccountId: 1, parentUuid: null })
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.new_folder_title))
 
     const input = document.querySelector<HTMLInputElement>('input')!

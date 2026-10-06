@@ -63,7 +63,7 @@ const visibleNodes = computed<VisibleNode[]>(() => {
 async function loadFolders(parentUuid: string | null): Promise<DriveItem[]> {
   if (!props.item) return []
   const res = await listDriveItems({
-    cloudAccountUuid: props.item.cloud_account_uuid,
+    cloudAccountId: props.item.cloud_account_id,
     parentUuid,
     type: 'folder',
     limit: 100,

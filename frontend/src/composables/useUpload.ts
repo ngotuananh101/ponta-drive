@@ -26,7 +26,7 @@ export interface UploadQueueItem {
 }
 
 export interface StartUploadOptions {
-  cloudAccountUuid: string
+  cloudAccountId: number
   parentUuid?: string | null
   files: File[]
   method: UploadMethod
@@ -53,7 +53,7 @@ export function useUpload() {
 
   async function uploadDirect(
     queueItem: UploadQueueItem,
-    cloudAccountUuid: string,
+    cloudAccountId: number,
     parentUuid: string | null | undefined,
   ): Promise<DriveItem> {
     const controller = new AbortController()
@@ -61,7 +61,7 @@ export function useUpload() {
     queueItem.status = 'uploading'
 
     const initRes = await initiatePresignedUpload({
-      cloudAccountUuid,
+      cloudAccountId,
       parentUuid,
       fileName: queueItem.file.name,
       size: queueItem.file.size,
@@ -86,7 +86,7 @@ export function useUpload() {
 
   async function uploadServerMultipart(
     queueItem: UploadQueueItem,
-    cloudAccountUuid: string,
+    cloudAccountId: number,
     parentUuid: string | null | undefined,
   ): Promise<DriveItem> {
     const controller = new AbortController()
@@ -95,7 +95,7 @@ export function useUpload() {
 
     const chunkSize = 5 * 1024 * 1024 // 5MB
     const initRes = await initiateMultipartUpload({
-      cloudAccountUuid,
+      cloudAccountId,
       parentUuid,
       fileName: queueItem.file.name,
       size: queueItem.file.size,
@@ -193,13 +193,13 @@ export function useUpload() {
           if (existing) {
             uuid = existing.uuid
           } else {
-            const created = await driveStore.createFolder(options.cloudAccountUuid, parentUuid, name)
+            const created = await driveStore.createFolder(options.cloudAccountId, parentUuid, name)
             uuid = created.uuid
           }
         } else {
           // Nested directory: create via the raw API (do NOT insert into the
           // current listing, which would misplace the sub-folder).
-          const res = await createDriveFolder({ cloudAccountUuid: options.cloudAccountUuid, parentUuid, name })
+          const res = await createDriveFolder({ cloudAccountId: options.cloudAccountId, parentUuid, name })
           uuid = (res.data as DriveItem).uuid
         }
         dirUuidByPath[dirPath] = uuid
@@ -216,9 +216,9 @@ export function useUpload() {
           : options.parentUuid ?? null
         let item: DriveItem
         if (options.method === 'direct') {
-          item = await uploadDirect(qItem, options.cloudAccountUuid, targetParent)
+          item = await uploadDirect(qItem, options.cloudAccountId, targetParent)
         } else {
-          item = await uploadServerMultipart(qItem, options.cloudAccountUuid, targetParent)
+          item = await uploadServerMultipart(qItem, options.cloudAccountId, targetParent)
         }
         completedItems.push(item)
         options.onItemCompleted?.(item)

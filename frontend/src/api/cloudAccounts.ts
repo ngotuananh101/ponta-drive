@@ -15,7 +15,8 @@ export interface CloudAccountCredentials {
 }
 
 export interface CloudAccount {
-  uuid: string
+  /** Public numeric identifier, used in the drive URL and every account call. */
+  id: number
   name: string
   provider: string
   credentials: CloudAccountCredentials | null
@@ -65,8 +66,8 @@ export async function createCloudAccount(
   })
 }
 
-export async function getCloudAccount(uuid: string): Promise<ApiResponse<CloudAccount>> {
-  return fetchApi<ApiResponse<CloudAccount>>(`/v1/cloud-accounts/${uuid}`)
+export async function getCloudAccount(id: number): Promise<ApiResponse<CloudAccount>> {
+  return fetchApi<ApiResponse<CloudAccount>>(`/v1/cloud-accounts/${id}`)
 }
 
 /**
@@ -75,19 +76,19 @@ export async function getCloudAccount(uuid: string): Promise<ApiResponse<CloudAc
  * after creation. Leaving out `secret_access_key` keeps the stored one.
  */
 export async function updateCloudAccount(
-  uuid: string,
+  id: number,
   payload: UpdateCloudAccountPayload,
 ): Promise<ApiResponse<CloudAccount>> {
-  return fetchApi<ApiResponse<CloudAccount>>(`/v1/cloud-accounts/${uuid}`, {
+  return fetchApi<ApiResponse<CloudAccount>>(`/v1/cloud-accounts/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   })
 }
 
-export async function deleteCloudAccount(uuid: string): Promise<ApiResponse> {
-  return fetchApi<ApiResponse>(`/v1/cloud-accounts/${uuid}`, { method: 'DELETE' })
+export async function deleteCloudAccount(id: number): Promise<ApiResponse> {
+  return fetchApi<ApiResponse>(`/v1/cloud-accounts/${id}`, { method: 'DELETE' })
 }
 
-export async function syncCloudAccount(uuid: string): Promise<ApiResponse> {
-  return fetchApi<ApiResponse>(`/v1/cloud-accounts/${uuid}/sync`, { method: 'POST' })
+export async function syncCloudAccount(id: number): Promise<ApiResponse> {
+  return fetchApi<ApiResponse>(`/v1/cloud-accounts/${id}/sync`, { method: 'POST' })
 }

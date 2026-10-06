@@ -16,7 +16,7 @@ const testItem: DriveItem = {
   mime_type: 'application/octet-stream',
   size: 500,
   extension: 'docx',
-  cloud_account_uuid: 'acc-1',
+  cloud_account_id: 1,
   is_starred: false,
   status: 'ready',
   updated_at: '2026-10-04 00:00:00',

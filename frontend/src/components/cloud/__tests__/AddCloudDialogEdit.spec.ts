@@ -11,7 +11,7 @@ import viLocale from '@/locales/vi.json'
 
 function account(partial: Partial<CloudAccount>): CloudAccount {
   return {
-    uuid: 'acc-1',
+    id: 1,
     name: 'My Bucket',
     provider: 'minio',
     credentials: {
@@ -32,7 +32,7 @@ function account(partial: Partial<CloudAccount>): CloudAccount {
   }
 }
 
-function mountDialog(props: { editUuid?: string | null } = {}) {
+function mountDialog(props: { editId?: number | null } = {}) {
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
   return mount(AddCloudDialog, {
     props: { open: true, ...props },
@@ -50,9 +50,9 @@ beforeEach(() => {
 describe('AddCloudDialog edit mode', () => {
   it('prefills the form from the account being edited', async () => {
     const store = useCloudAccountsStore()
-    store.accounts = [account({ uuid: 'acc-9', name: 'Bucket Nine' })]
+    store.accounts = [account({ id: 9, name: 'Bucket Nine' })]
 
-    mountDialog({ editUuid: 'acc-9' })
+    mountDialog({ editId: 9 })
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.cloud.edit_title))
 
     const name = document.querySelector<HTMLInputElement>('#cloud-name')!
@@ -63,12 +63,12 @@ describe('AddCloudDialog edit mode', () => {
 
   it('saves via update and omits an empty secret', async () => {
     const store = useCloudAccountsStore()
-    store.accounts = [account({ uuid: 'acc-9', name: 'Bucket Nine' })]
+    store.accounts = [account({ id: 9, name: 'Bucket Nine' })]
     const updateSpy = vi
       .spyOn(api, 'updateCloudAccount')
-      .mockResolvedValue({ status: 'ok', data: account({ uuid: 'acc-9', name: 'Bucket Nine' }) })
+      .mockResolvedValue({ status: 'ok', data: account({ id: 9, name: 'Bucket Nine' }) })
 
-    const wrapper = mountDialog({ editUuid: 'acc-9' })
+    const wrapper = mountDialog({ editId: 9 })
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.cloud.edit_title))
 
     // Edit mode saves from the credential step directly (no test gate).
@@ -79,19 +79,19 @@ describe('AddCloudDialog edit mode', () => {
     await wrapper.vm.$nextTick()
 
     await vi.waitFor(() => expect(updateSpy).toHaveBeenCalled())
-    expect(updateSpy.mock.calls[0]?.[0]).toBe('acc-9')
+    expect(updateSpy.mock.calls[0]?.[0]).toBe(9)
     expect(updateSpy.mock.calls[0]?.[1]).not.toHaveProperty('secret_access_key')
     expect(updateSpy.mock.calls[0]?.[1]).not.toHaveProperty('provider')
   })
 
   it('sends a new secret when the user enters one', async () => {
     const store = useCloudAccountsStore()
-    store.accounts = [account({ uuid: 'acc-9', name: 'Bucket Nine' })]
+    store.accounts = [account({ id: 9, name: 'Bucket Nine' })]
     const updateSpy = vi
       .spyOn(api, 'updateCloudAccount')
-      .mockResolvedValue({ status: 'ok', data: account({ uuid: 'acc-9', name: 'Bucket Nine' }) })
+      .mockResolvedValue({ status: 'ok', data: account({ id: 9, name: 'Bucket Nine' }) })
 
-    const wrapper = mountDialog({ editUuid: 'acc-9' })
+    const wrapper = mountDialog({ editId: 9 })
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.cloud.edit_title))
 
     const secret = document.querySelector<HTMLInputElement>('#cloud-secret')!

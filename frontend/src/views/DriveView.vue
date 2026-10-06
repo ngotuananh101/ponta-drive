@@ -44,7 +44,7 @@ import {
 import type { DriveItem } from '@/api/driveItems'
 
 const props = defineProps<{
-  cloudUuid: string
+  cloudId: string
   folderUuid?: string
 }>()
 
@@ -53,9 +53,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 const cloudStore = useCloudAccountsStore()
 
-// The account uuid lives in the URL, so a folder view is shareable and the back
-// button works. `cloudAccountUuid` is the string passed straight to the API.
-const cloudAccountUuid = computed(() => props.cloudUuid)
+// The numeric account id lives in the URL, so a folder view is shareable and
+// the back button works. Route params arrive as strings; the API takes a
+// number, so the segment is parsed once here.
+const cloudAccountId = computed(() => Number(props.cloudId))
 const parentUuid = computed(() => props.folderUuid ?? null)
 
 type ViewMode = 'list' | 'grid'
@@ -99,7 +100,7 @@ const driveTitle = computed(() => {
     const current = breadcrumb.value[breadcrumb.value.length - 1]
     return current?.name ?? ''
   }
-  return cloudStore.accounts.find((a) => a.uuid === cloudAccountUuid.value)?.name ?? ''
+  return cloudStore.accounts.find((a) => a.id === cloudAccountId.value)?.name ?? ''
 })
 
 watch(
@@ -117,7 +118,7 @@ watch(
 const pageTitle = computed(() => driveTitle.value || t('drive.nav_my_drive'))
 
 const { items, loading, error, hasMore, loadMore, reload } = useDriveItems(() => ({
-  cloudAccountUuid: cloudAccountUuid.value,
+  cloudAccountId: cloudAccountId.value,
   parentUuid: parentUuid.value,
   search: search.value,
   sort: sort.value,
@@ -159,7 +160,7 @@ function selectItem(uuid: string) {
 
 function openFolder(uuid: string) {
   selectedItemId.value = null
-  void router.push(driveLocation(props.cloudUuid, uuid))
+  void router.push(driveLocation(cloudAccountId.value, uuid))
 }
 
 function goToCrumb(index: number) {
@@ -167,12 +168,12 @@ function goToCrumb(index: number) {
   // has no folder segment.
   selectedItemId.value = null
   if (index <= 0) {
-    void router.push(driveLocation(props.cloudUuid))
+    void router.push(driveLocation(cloudAccountId.value))
     return
   }
   const crumb = breadcrumb.value[index - 1]
   if (!crumb) return
-  void router.push(driveLocation(props.cloudUuid, crumb.uuid))
+  void router.push(driveLocation(cloudAccountId.value, crumb.uuid))
 }
 
 /**
@@ -280,8 +281,8 @@ function openMove(item: DriveItem) {
           <!-- Sync the account in view. Hidden until an account is selected,
                since there is nothing to sync without one. -->
           <SyncCloudButton
-            v-if="cloudAccountUuid"
-            :account-uuid="cloudAccountUuid"
+            v-if="cloudAccountId"
+            :account-id="cloudAccountId"
             labeled
             @synced="handleSynced"
           />
@@ -569,7 +570,7 @@ function openMove(item: DriveItem) {
 
     <NewFolderDialog
       v-model:open="isNewFolderOpen"
-      :cloud-account-uuid="cloudAccountUuid"
+      :cloud-account-id="cloudAccountId"
       :parent-uuid="parentUuid"
     />
     <RenameDialog
@@ -583,7 +584,7 @@ function openMove(item: DriveItem) {
     <MoveDialog v-model:open="isMoveOpen" :item="activeItem" :parent-uuid="parentUuid" />
     <UploadDialog
       v-model:open="isUploadOpen"
-      :cloud-account-uuid="cloudAccountUuid"
+      :cloud-account-id="cloudAccountId"
       :parent-uuid="parentUuid"
       :initial-mode="uploadInitialMode"
     />

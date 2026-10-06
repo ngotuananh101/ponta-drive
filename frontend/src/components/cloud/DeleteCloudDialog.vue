@@ -27,7 +27,7 @@ const open = defineModel<boolean>('open', { required: true })
 
 const props = defineProps<{
   /** The account being removed; `null` keeps the dialog closed. */
-  accountUuid: string | null
+  accountId: number | null
   accountName: string
 }>()
 
@@ -40,11 +40,11 @@ const deleting = ref(false)
 const error = ref<string | null>(null)
 
 async function confirm() {
-  if (!props.accountUuid) return
+  if (!props.accountId) return
   deleting.value = true
   error.value = null
   try {
-    await store.remove(props.accountUuid)
+    await store.remove(props.accountId)
     toast.success(t('cloud.delete_success'))
     open.value = false
     emit('deleted')

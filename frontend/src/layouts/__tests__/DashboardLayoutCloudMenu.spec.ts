@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
+import { makeDriveRouter } from '@/test/driveRoutes'
 import * as cloudApi from '@/api/cloudAccounts'
 import type { CloudAccount } from '@/api/cloudAccounts'
 import { humanizeBytes } from '@/lib/format'
@@ -12,7 +12,7 @@ import viLocale from '@/locales/vi.json'
 
 function account(partial: Partial<CloudAccount>): CloudAccount {
   return {
-    uuid: 'acc-1',
+    id: 1,
     name: 'Account',
     provider: 's3',
     credentials: null,
@@ -26,21 +26,10 @@ function account(partial: Partial<CloudAccount>): CloudAccount {
   }
 }
 
-function makeRouter(): Router {
-  return createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      { path: '/', name: 'home', component: { template: '<div/>' } },
-      { path: '/c/:cloudUuid', name: 'drive', component: { template: '<div/>' } },
-      { path: '/c/:cloudUuid/f/:folderUuid', name: 'drive-folder', component: { template: '<div/>' } },
-    ],
-  })
-}
-
 async function mountLayout(accounts: CloudAccount[], path = '/') {
   vi.spyOn(cloudApi, 'listCloudAccounts').mockResolvedValue({ status: 'ok', data: accounts })
 
-  const router = makeRouter()
+  const router = makeDriveRouter()
   await router.push(path)
   await router.isReady()
 
@@ -73,7 +62,7 @@ beforeEach(() => {
 
 describe('DashboardLayout account actions menu', () => {
   it('opens a menu with sync, edit, set-default and delete', async () => {
-    const { wrapper } = await mountLayout([account({ uuid: 'acc-1', name: 'Account' })])
+    const { wrapper } = await mountLayout([account({ id: 1, name: 'Account' })])
 
     await kebab(wrapper).trigger('click')
     await wrapper.vm.$nextTick()
@@ -87,7 +76,7 @@ describe('DashboardLayout account actions menu', () => {
 
   it('syncs the account from the menu', async () => {
     const syncSpy = vi.spyOn(cloudApi, 'syncCloudAccount').mockResolvedValue({ status: 'ok' })
-    const { wrapper } = await mountLayout([account({ uuid: 'acc-1', name: 'Account' })])
+    const { wrapper } = await mountLayout([account({ id: 1, name: 'Account' })])
 
     await kebab(wrapper).trigger('click')
     await wrapper.vm.$nextTick()
@@ -97,14 +86,14 @@ describe('DashboardLayout account actions menu', () => {
     item.click()
     await wrapper.vm.$nextTick()
 
-    await vi.waitFor(() => expect(syncSpy).toHaveBeenCalledWith('acc-1'))
+    await vi.waitFor(() => expect(syncSpy).toHaveBeenCalledWith(1))
   })
 
   it('marks the account as default from the menu', async () => {
     const updateSpy = vi
       .spyOn(cloudApi, 'updateCloudAccount')
-      .mockResolvedValue({ status: 'ok', data: account({ uuid: 'acc-1', name: 'Account', is_default: true }) })
-    const { wrapper } = await mountLayout([account({ uuid: 'acc-1', name: 'Account' })])
+      .mockResolvedValue({ status: 'ok', data: account({ id: 1, name: 'Account', is_default: true }) })
+    const { wrapper } = await mountLayout([account({ id: 1, name: 'Account' })])
 
     await kebab(wrapper).trigger('click')
     await wrapper.vm.$nextTick()
@@ -114,7 +103,7 @@ describe('DashboardLayout account actions menu', () => {
     item.click()
 
     await vi.waitFor(() => expect(updateSpy).toHaveBeenCalled())
-    expect(updateSpy.mock.calls[0]?.[0]).toBe('acc-1')
+    expect(updateSpy.mock.calls[0]?.[0]).toBe(1)
     expect(updateSpy.mock.calls[0]?.[1]).toEqual({ is_default: true })
   })
 })
@@ -124,8 +113,8 @@ describe('DashboardLayout storage footer', () => {
     const used = 3 * 1024 ** 3
     const total = 2 * 1024 ** 4
     const { wrapper } = await mountLayout(
-      [account({ uuid: 'acc-1', name: 'Account', used_storage: used, total_storage: total })],
-      '/c/acc-1',
+      [account({ id: 1, name: 'Account', used_storage: used, total_storage: total })],
+      '/d/1',
     )
 
     const expected = viLocale.drive.storage_used
@@ -138,7 +127,7 @@ describe('DashboardLayout storage footer', () => {
   })
 
   it('reads as zero for an unknown account rather than a placeholder', async () => {
-    const { wrapper } = await mountLayout([account({ uuid: 'acc-1', name: 'Account' })], '/c/other')
+    const { wrapper } = await mountLayout([account({ id: 1, name: 'Account' })], '/d/999')
 
     const expected = viLocale.drive.storage_used
       .replace('{used}', humanizeBytes(0))

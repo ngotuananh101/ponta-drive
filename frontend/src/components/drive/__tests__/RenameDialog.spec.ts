@@ -15,7 +15,7 @@ const testItem: DriveItem = {
   mime_type: 'application/pdf',
   size: 500,
   extension: 'pdf',
-  cloud_account_uuid: 'c-1',
+  cloud_account_id: 1,
   is_starred: false,
   status: 'ready',
   updated_at: '2026-10-04 00:00:00',
