@@ -144,6 +144,8 @@
   },
   "drive": {
     "search_placeholder": "Search in Drive",
+    "search_clear": "Clear search",
+    "search_no_results": "No results found",
     "new_button": "New",
     "new_folder": "New folder",
     "upload_file": "File upload",
