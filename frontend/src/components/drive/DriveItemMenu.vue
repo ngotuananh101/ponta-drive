@@ -8,6 +8,7 @@ import {
   Star,
   Edit2,
   Trash2,
+  FolderInput,
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,6 +27,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   rename: [item: DriveItem]
+  move: [item: DriveItem]
   delete: [item: DriveItem]
 }>()
 
@@ -96,6 +98,11 @@ async function handleToggleStar() {
       >
         <Edit2 class="h-4 w-4" />
         <span>{{ t('drive.action_rename') }}</span>
+      </DropdownMenuItem>
+
+      <DropdownMenuItem class="cursor-pointer py-2 gap-2 text-sm" @click="emit('move', item)">
+        <FolderInput class="h-4 w-4" />
+        <span>{{ t('drive.action_move') }}</span>
       </DropdownMenuItem>
 
       <DropdownMenuSeparator />
