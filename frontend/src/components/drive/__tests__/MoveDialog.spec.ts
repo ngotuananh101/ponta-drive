@@ -170,8 +170,8 @@ describe('MoveDialog', () => {
     clickButton(viLocale.drive.move_here)
     await vi.waitFor(() => expect(moveSpy).not.toHaveBeenCalled())
     expect(wrapper.emitted('moved')).toBeFalsy()
-    // dialog should have closed via the short-circuit
-    expect(wrapper.props('open')).toBe(true)
+    // dialog closes via the short-circuit: `open.value = false` emits update:open(false)
+    expect(wrapper.emitted('update:open')).toEqual([[false]])
   })
 
   it('does not call store.move or emit moved on a no-op move to the current parent folder', async () => {
