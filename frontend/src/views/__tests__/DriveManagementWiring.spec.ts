@@ -9,6 +9,7 @@ import { useDriveActionsStore } from '@/stores/driveActions'
 import { useAuthStore } from '@/stores/auth'
 import * as cloudApi from '@/api/cloudAccounts'
 import * as driveApi from '@/api/driveItems'
+import type { DriveItem } from '@/api/driveItems'
 import viLocale from '@/locales/vi.json'
 
 const CLOUD = {
@@ -24,6 +25,58 @@ const CLOUD = {
   is_active: true,
 }
 
+const ITEM: DriveItem = {
+  uuid: 'f-1',
+  name: 'document.pdf',
+  type: 'file',
+  mime_type: 'application/pdf',
+  size: 1000,
+  extension: 'pdf',
+  cloud_account_uuid: 'c-1',
+  is_starred: false,
+  status: 'ready',
+  updated_at: '2026-10-04 00:00:00',
+}
+
+/** Mocks the APIs DriveView fetches on mount and mounts it at `/c/c-1`. */
+async function mountDriveView(items: DriveItem[] = []) {
+  vi.spyOn(cloudApi, 'listCloudAccounts').mockResolvedValue({ status: 'ok', data: [CLOUD] })
+  vi.spyOn(driveApi, 'listDriveItems').mockResolvedValue({
+    status: 'ok',
+    data: items,
+    meta: { has_more: false, next_cursor: '' },
+  })
+  vi.spyOn(driveApi, 'getDriveItemBreadcrumb').mockResolvedValue({ status: 'ok', data: [] })
+
+  // Skip the network round-trip in `fetchUser`: a user is already present.
+  const auth = useAuthStore()
+  auth.user = {
+    id: 1,
+    uuid: 'u-1',
+    name: 'Anh',
+    username: 'anh',
+    email: 'anh@example.com',
+    avatar: '',
+  }
+
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/c/:cloudUuid', name: 'drive', component: DriveView, props: true }],
+  })
+  await router.push('/c/c-1')
+  await router.isReady()
+
+  const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
+  return mount(DriveView, {
+    global: {
+      plugins: [router, i18n],
+      stubs: { DashboardLayout: { template: '<div><slot /></div>' }, SyncCloudButton: true },
+    },
+    props: { cloudUuid: 'c-1' },
+    attachTo: document.body,
+  })
+}
+
 describe('DriveView action wiring', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -32,41 +85,7 @@ describe('DriveView action wiring', () => {
   })
 
   it('opens NewFolderDialog when driveActions requests new-folder', async () => {
-    vi.spyOn(cloudApi, 'listCloudAccounts').mockResolvedValue({ status: 'ok', data: [CLOUD] })
-    vi.spyOn(driveApi, 'listDriveItems').mockResolvedValue({
-      status: 'ok',
-      data: [],
-      meta: { has_more: false, next_cursor: '' },
-    })
-    vi.spyOn(driveApi, 'getDriveItemBreadcrumb').mockResolvedValue({ status: 'ok', data: [] })
-
-    // Skip the network round-trip in `fetchUser`: a user is already present.
-    const auth = useAuthStore()
-    auth.user = {
-      id: 1,
-      uuid: 'u-1',
-      name: 'Anh',
-      username: 'anh',
-      email: 'anh@example.com',
-      avatar: '',
-    }
-
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/c/:cloudUuid', name: 'drive', component: DriveView, props: true }],
-    })
-    await router.push('/c/c-1')
-    await router.isReady()
-
-    const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
-    const wrapper = mount(DriveView, {
-      global: {
-        plugins: [router, i18n],
-        stubs: { DashboardLayout: { template: '<div><slot /></div>' }, SyncCloudButton: true },
-      },
-      props: { cloudUuid: 'c-1' },
-      attachTo: document.body,
-    })
+    const wrapper = await mountDriveView()
 
     const actionsStore = useDriveActionsStore()
     actionsStore.request('new-folder')
@@ -76,52 +95,7 @@ describe('DriveView action wiring', () => {
   })
 
   it('opens MoveDialog when the menu move action is clicked', async () => {
-    const item = {
-      uuid: 'f-1',
-      name: 'document.pdf',
-      type: 'file',
-      mime_type: 'application/pdf',
-      size: 1000,
-      extension: 'pdf',
-      cloud_account_uuid: 'c-1',
-      is_starred: false,
-      status: 'ready',
-      updated_at: '2026-10-04 00:00:00',
-    }
-    vi.spyOn(cloudApi, 'listCloudAccounts').mockResolvedValue({ status: 'ok', data: [CLOUD] })
-    vi.spyOn(driveApi, 'listDriveItems').mockResolvedValue({
-      status: 'ok',
-      data: [item],
-      meta: { has_more: false, next_cursor: '' },
-    })
-    vi.spyOn(driveApi, 'getDriveItemBreadcrumb').mockResolvedValue({ status: 'ok', data: [] })
-
-    const auth = useAuthStore()
-    auth.user = {
-      id: 1,
-      uuid: 'u-1',
-      name: 'Anh',
-      username: 'anh',
-      email: 'anh@example.com',
-      avatar: '',
-    }
-
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/c/:cloudUuid', name: 'drive', component: DriveView, props: true }],
-    })
-    await router.push('/c/c-1')
-    await router.isReady()
-
-    const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })
-    const wrapper = mount(DriveView, {
-      global: {
-        plugins: [router, i18n],
-        stubs: { DashboardLayout: { template: '<div><slot /></div>' }, SyncCloudButton: true },
-      },
-      props: { cloudUuid: 'c-1' },
-      attachTo: document.body,
-    })
+    const wrapper = await mountDriveView([ITEM])
 
     // Wait for the list row to render a menu trigger, then open the item's
     // action menu via its aria-labelled "Thao tác" button.
