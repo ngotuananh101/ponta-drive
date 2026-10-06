@@ -205,36 +205,42 @@ async function submit() {
         </div>
 
         <template v-else>
-          <button
+          <div
             v-for="v in visibleNodes"
             :key="v.node.uuid"
-            type="button"
-            data-testid="move-node"
-            :aria-disabled="isForbidden(v.node.uuid)"
-            class="flex items-center rounded px-2 py-1.5 text-sm text-left cursor-pointer hover:bg-accent"
-            :class="{
-              'bg-primary/10 text-primary': selectedUuid === v.node.uuid && !isForbidden(v.node.uuid),
-              'opacity-60 cursor-not-allowed': isForbidden(v.node.uuid),
-            }"
+            class="flex items-center"
             :style="{ paddingLeft: `${v.depth}rem` }"
-            @click="select(v.node.uuid)"
           >
             <button
               v-if="v.node.type === 'folder'"
               type="button"
               :aria-label="expanded.has(v.node.uuid) ? t('common.collapse') : t('common.expand')"
-              @click.stop="toggle(v.node)"
-              class="mr-1 shrink-0 opacity-60 hover:opacity-100"
+              @click="toggle(v.node)"
+              class="mr-1 shrink-0 rounded p-0.5 opacity-60 hover:opacity-100 hover:bg-accent"
             >
               <ChevronRight
-                :class="expanded.has(v.node.uuid) ? 'rotate-190' : ''"
+                :class="expanded.has(v.node.uuid) ? 'rotate-90' : ''"
                 class="h-4 w-4 transition-transform"
               />
               <Loader2 v-if="loadingNodes.has(v.node.uuid)" class="h-3 w-3 animate-spin" />
             </button>
-            <Folder v-if="v.node.type === 'folder'" class="h-4 w-4 shrink-0" />
-            <span class="truncate">{{ v.node.name }}</span>
-          </button>
+            <span v-else class="mr-1 w-5 shrink-0" aria-hidden="true" />
+
+            <button
+              type="button"
+              data-testid="move-node"
+              :disabled="isForbidden(v.node.uuid)"
+              :aria-disabled="isForbidden(v.node.uuid)"
+              class="flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1.5 text-sm text-left cursor-pointer hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              :class="{
+                'bg-primary/10 text-primary': selectedUuid === v.node.uuid && !isForbidden(v.node.uuid),
+              }"
+              @click="select(v.node.uuid)"
+            >
+              <Folder v-if="v.node.type === 'folder'" class="h-4 w-4 shrink-0" />
+              <span class="truncate">{{ v.node.name }}</span>
+            </button>
+          </div>
 
           <p
             v-show="visibleNodes.length === 0"
