@@ -6,6 +6,7 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 
 import DriveView from '../DriveView.vue'
 import { useDriveActionsStore } from '@/stores/driveActions'
+import { useDriveSearchStore } from '@/stores/driveSearch'
 import { useAuthStore } from '@/stores/auth'
 import * as cloudApi from '@/api/cloudAccounts'
 import * as driveApi from '@/api/driveItems'
@@ -120,5 +121,58 @@ describe('DriveView action wiring', () => {
 
     // The MoveDialog renders its title when open.
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.move_title))
+  })
+
+  it('reloads the list with the search term set in the store', async () => {
+    const listSpy = vi.spyOn(driveApi, 'listDriveItems')
+    await mountDriveView([ITEM])
+    listSpy.mockClear()
+
+    const searchStore = useDriveSearchStore()
+    searchStore.setQuery('report')
+
+    // The composable debounces query changes before refetching.
+    await vi.waitFor(() =>
+      expect(listSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'report' }),
+        expect.anything(),
+      ),
+    )
+  })
+
+  it('starts in grid mode and opens the details panel from persisted state', async () => {
+    localStorage.setItem('ponta-drive-view-mode', JSON.stringify('grid'))
+    localStorage.setItem('ponta-drive-show-details', JSON.stringify(true))
+
+    const wrapper = await mountDriveView([ITEM])
+    await wrapper.vm.$nextTick()
+
+    // Grid mode renders section headings; list mode renders a table header.
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.type_folder))
+    expect(document.body.textContent).not.toContain(viLocale.drive.table_name)
+
+    // Details panel renders its "no selection" prompt when open.
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(viLocale.drive.detail_select_prompt),
+    )
+  })
+
+  it('defaults to grid mode and closed details with nothing persisted', async () => {
+    const wrapper = await mountDriveView([ITEM])
+    await wrapper.vm.$nextTick()
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.type_folder))
+    expect(document.body.textContent).not.toContain(viLocale.drive.table_name)
+    expect(document.body.textContent).not.toContain(viLocale.drive.detail_select_prompt)
+  })
+
+  it('starts in list mode when that is what is persisted', async () => {
+    localStorage.setItem('ponta-drive-view-mode', JSON.stringify('list'))
+
+    const wrapper = await mountDriveView([ITEM])
+    await wrapper.vm.$nextTick()
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.table_name))
+    expect(document.body.textContent).not.toContain(viLocale.drive.detail_select_prompt)
   })
 })
