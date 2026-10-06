@@ -11,7 +11,7 @@ describe('auth store', () => {
   })
 
   it('aborts and clears the upload queue on logout', async () => {
-    vi.spyOn(clientApi, 'fetchApi').mockResolvedValue({ status: 'ok' } as any)
+    vi.spyOn(clientApi, 'fetchApi').mockResolvedValue({ status: 'ok' })
 
     const authStore = useAuthStore()
     const uploadStore = useUploadStore()
