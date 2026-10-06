@@ -39,7 +39,7 @@ const ITEM: DriveItem = {
   updated_at: '2026-10-04 00:00:00',
 }
 
-/** Mocks the APIs DriveView fetches on mount and mounts it at `/c/c-1`. */
+/** Mocks the APIs DriveView fetches on mount and mounts it at `/d/c-1`. */
 async function mountDriveView(items: DriveItem[] = []) {
   vi.spyOn(cloudApi, 'listCloudAccounts').mockResolvedValue({ status: 'ok', data: [CLOUD] })
   vi.spyOn(driveApi, 'listDriveItems').mockResolvedValue({
@@ -62,9 +62,9 @@ async function mountDriveView(items: DriveItem[] = []) {
 
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/c/:cloudUuid', name: 'drive', component: DriveView, props: true }],
+    routes: [{ path: '/d/:cloudUuid', name: 'drive', component: DriveView, props: true }],
   })
-  await router.push('/c/c-1')
+  await router.push('/d/c-1')
   await router.isReady()
 
   const i18n = createI18n({ legacy: false, locale: 'vi', messages: { vi: viLocale } })

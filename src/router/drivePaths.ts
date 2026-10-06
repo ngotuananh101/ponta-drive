@@ -6,7 +6,7 @@ import type { RouteLocationRaw } from 'vue-router'
  * through here and produces the same shape.
  */
 export function drivePath(cloudUuid: string, folderUuid?: string | null): string {
-  return folderUuid ? `/c/${cloudUuid}/f/${folderUuid}` : `/c/${cloudUuid}`
+  return folderUuid ? `/d/${cloudUuid}/f/${folderUuid}` : `/d/${cloudUuid}`
 }
 
 export function driveLocation(cloudUuid: string, folderUuid?: string | null): RouteLocationRaw {

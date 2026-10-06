@@ -31,8 +31,8 @@ function makeRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<div/>' } },
-      { path: '/c/:cloudUuid', name: 'drive', component: { template: '<div/>' } },
-      { path: '/c/:cloudUuid/f/:folderUuid', name: 'drive-folder', component: { template: '<div/>' } },
+      { path: '/d/:cloudUuid', name: 'drive', component: { template: '<div/>' } },
+      { path: '/d/:cloudUuid/f/:folderUuid', name: 'drive-folder', component: { template: '<div/>' } },
     ],
   })
 }
@@ -125,7 +125,7 @@ describe('DashboardLayout storage footer', () => {
     const total = 2 * 1024 ** 4
     const { wrapper } = await mountLayout(
       [account({ uuid: 'acc-1', name: 'Account', used_storage: used, total_storage: total })],
-      '/c/acc-1',
+      '/d/acc-1',
     )
 
     const expected = viLocale.drive.storage_used
@@ -138,7 +138,7 @@ describe('DashboardLayout storage footer', () => {
   })
 
   it('reads as zero for an unknown account rather than a placeholder', async () => {
-    const { wrapper } = await mountLayout([account({ uuid: 'acc-1', name: 'Account' })], '/c/other')
+    const { wrapper } = await mountLayout([account({ uuid: 'acc-1', name: 'Account' })], '/d/other')
 
     const expected = viLocale.drive.storage_used
       .replace('{used}', humanizeBytes(0))

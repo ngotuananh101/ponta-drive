@@ -30,8 +30,8 @@ function makeRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<div/>' } },
-      { path: '/c/:cloudUuid', name: 'drive', component: { template: '<div/>' } },
-      { path: '/c/:cloudUuid/f/:folderUuid', name: 'drive-folder', component: { template: '<div/>' } },
+      { path: '/d/:cloudUuid', name: 'drive', component: { template: '<div/>' } },
+      { path: '/d/:cloudUuid/f/:folderUuid', name: 'drive-folder', component: { template: '<div/>' } },
     ],
   })
 }

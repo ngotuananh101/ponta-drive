@@ -46,9 +46,9 @@ function makeRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<div/>' } },
-      { path: '/c/:cloudUuid', name: 'drive', component: DriveView, props: true },
+      { path: '/d/:cloudUuid', name: 'drive', component: DriveView, props: true },
       {
-        path: '/c/:cloudUuid/f/:folderUuid',
+        path: '/d/:cloudUuid/f/:folderUuid',
         name: 'drive-folder',
         component: DriveView,
         props: true,
@@ -101,7 +101,7 @@ beforeEach(() => {
 
 describe('DriveView document title', () => {
   it('uses the drive name at the root', async () => {
-    const { wrapper } = await mountDrive('/c/acc-1', [])
+    const { wrapper } = await mountDrive('/d/acc-1', [])
     await vi.waitFor(() => expect(document.title).toContain('My S3'))
     expect(document.title).toBe('My S3 - Ponta Drive')
     // The in-page header shows the same name.
@@ -110,7 +110,7 @@ describe('DriveView document title', () => {
   })
 
   it('uses the current folder name inside a folder', async () => {
-    const { wrapper } = await mountDrive('/c/acc-1/f/folder-9', [
+    const { wrapper } = await mountDrive('/d/acc-1/f/folder-9', [
       driveItem({ uuid: 'folder-9', name: 'Photos' }),
     ])
     await vi.waitFor(() => expect(document.title).toContain('Photos'))
