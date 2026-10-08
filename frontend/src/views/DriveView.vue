@@ -451,7 +451,7 @@ function openMove(item: DriveItem) {
               <h3 class="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 px-1">
                 {{ t('drive.type_folder') }}
               </h3>
-              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 <div
                   v-for="item in folders"
                   :key="item.uuid"
@@ -474,7 +474,7 @@ function openMove(item: DriveItem) {
               <h3 class="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 px-1">
                 {{ t('drive.type_file') }}
               </h3>
-              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 <div
                   v-for="item in files"
                   :key="item.uuid"
