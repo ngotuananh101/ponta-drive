@@ -67,7 +67,8 @@
     "drive": "Drive của tôi",
     "login": "Đăng nhập",
     "forgot_password": "Quên mật khẩu",
-    "reset_password": "Đặt lại mật khẩu"
+    "reset_password": "Đặt lại mật khẩu",
+    "preview": "Xem trước"
   },
   "auth": {
     "brand": "Ponta Drive",
@@ -229,6 +230,13 @@
     "toast_starred": "Đã gắn dấu sao.",
     "toast_unstarred": "Đã bỏ dấu sao.",
     "toast_download_started": "Đang chuẩn bị tải xuống...",
-    "toast_upload_completed": "Tải lên hoàn tất."
+    "toast_upload_completed": "Tải lên hoàn tất.",
+    "action_preview": "Xem trước",
+    "preview_back": "Quay lại Drive",
+    "preview_loading": "Đang tải bản xem trước...",
+    "preview_error": "Không thể mở bản xem trước.",
+    "preview_unsupported": "Định dạng tệp này không hỗ trợ xem trước. Hãy tải xuống để xem.",
+    "preview_too_large": "Tệp quá lớn để xem trước. Hãy tải xuống để xem.",
+    "preview_download": "Tải xuống"
   }
 }
