@@ -54,7 +54,10 @@
     "delete_confirm": "Account \"{name}\" will be removed from Drive. This cannot be undone.",
     "delete": "Delete",
     "cancel": "Cancel",
-    "delete_success": "Storage account deleted."
+    "delete_success": "Storage account deleted.",
+    "cors_enable_action": "Enable preview access",
+    "cors_enabled": "Preview access enabled for this bucket.",
+    "cors_failed": "Could not enable preview access. Check the storage key permissions."
   },
   "theme": {
     "toggle_theme": "Toggle theme",
