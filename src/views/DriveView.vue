@@ -21,7 +21,7 @@ import DriveItemMenu from '@/components/drive/DriveItemMenu.vue'
 import { useDriveItems } from '@/composables/useDriveItems'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { usePersistedRef } from '@/composables/usePersistedRef'
-import { driveLocation } from '@/router/drivePaths'
+import { driveLocation, previewLocation } from '@/router/drivePaths'
 import { setDocumentTitle } from '@/lib/documentTitle'
 import {
   DropdownMenu,
@@ -161,6 +161,12 @@ function selectItem(uuid: string) {
 function openFolder(uuid: string) {
   selectedItemId.value = null
   void router.push(driveLocation(cloudAccountId.value, uuid))
+}
+
+function openPreview(target: string | DriveItem) {
+  const uuid = typeof target === 'string' ? target : target.uuid
+  selectedItemId.value = null
+  void router.push(previewLocation(cloudAccountId.value, uuid))
 }
 
 function goToCrumb(index: number) {
@@ -382,7 +388,7 @@ function openMove(item: DriveItem) {
                     : 'hover:bg-muted/50',
                 ]"
                 @click="selectItem(item.uuid)"
-                @dblclick="item.type === 'folder' && openFolder(item.uuid)"
+                @dblclick="item.type === 'folder' ? openFolder(item.uuid) : openPreview(item.uuid)"
               >
                 <!-- Column: Name & Icon -->
                 <div class="col-span-6 sm:col-span-6 flex items-center gap-2.5 min-w-0 pr-2">
@@ -417,7 +423,7 @@ function openMove(item: DriveItem) {
                     {{ formatSize(item.size) }}
                   </span>
 
-                  <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" />
+                  <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" @preview="openPreview" />
                 </div>
               </div>
 
@@ -464,7 +470,7 @@ function openMove(item: DriveItem) {
                     <DriveItemIcon :item="item" />
                     <span class="text-sm font-medium text-foreground truncate">{{ item.name }}</span>
                   </div>
-                  <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" />
+                  <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" @preview="openPreview" />
                 </div>
               </div>
             </div>
@@ -481,6 +487,7 @@ function openMove(item: DriveItem) {
                   class="rounded-xl border border-border bg-card hover:bg-accent/40 transition-all cursor-pointer overflow-hidden shadow-xs group flex flex-col"
                   :class="{ 'bg-primary/10 border-primary/50': selectedItemId === item.uuid }"
                   @click="selectItem(item.uuid)"
+                  @dblclick="openPreview(item.uuid)"
                 >
                   <div class="h-28 bg-muted/40 flex items-center justify-center border-b border-border/60">
                     <DriveItemIcon :item="item" size-class="h-10 w-10" />
@@ -490,7 +497,7 @@ function openMove(item: DriveItem) {
                       <p class="text-xs font-medium text-foreground truncate">{{ item.name }}</p>
                       <p class="text-[11px] text-muted-foreground">{{ formatSize(item.size) }} • {{ formatDate(item.updated_at) }}</p>
                     </div>
-                    <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" />
+                    <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" @preview="openPreview" />
                   </div>
                 </div>
               </div>
