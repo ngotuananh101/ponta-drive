@@ -54,7 +54,10 @@
     "delete_confirm": "Tài khoản \"{name}\" sẽ bị gỡ khỏi Drive. Hành động này không thể hoàn tác.",
     "delete": "Xóa",
     "cancel": "Hủy",
-    "delete_success": "Đã xóa tài khoản lưu trữ."
+    "delete_success": "Đã xóa tài khoản lưu trữ.",
+    "cors_enable_action": "Bật quyền xem trước",
+    "cors_enabled": "Đã bật quyền xem trước cho bucket này.",
+    "cors_failed": "Không thể bật quyền xem trước. Hãy kiểm tra quyền của khóa lưu trữ."
   },
   "theme": {
     "toggle_theme": "Chuyển đổi giao diện",
