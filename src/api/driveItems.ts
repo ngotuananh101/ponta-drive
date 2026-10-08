@@ -159,3 +159,28 @@ export async function getDriveItemDownloadUrl(
     `/v1/drive/items/${encodeURIComponent(uuid)}/download?mode=json`,
   )
 }
+
+export type PreviewStrategy = 'direct' | 'proxy' | 'fallback'
+
+export interface DriveItemPreview {
+  strategy: PreviewStrategy
+  /** Absolute URL (direct) or same-origin path (proxy); empty for fallback. */
+  url: string
+  download_url: string
+  item: DriveItem
+  /** Non-empty only for fallback: "too_large" | "unsupported". */
+  reason: string
+}
+
+/**
+ * Resolves how to preview an item. The backend decides the strategy, so the
+ * client never has to guess whether a URL is CORS-readable or how big is too
+ * big.
+ */
+export async function getDriveItemPreview(
+  uuid: string,
+): Promise<ApiResponse<DriveItemPreview>> {
+  return fetchApi<ApiResponse<DriveItemPreview>>(
+    `/v1/drive/items/${encodeURIComponent(uuid)}/preview?mode=json`,
+  )
+}
