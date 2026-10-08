@@ -54,7 +54,10 @@
     "delete_confirm": "Account \"{name}\" will be removed from Drive. This cannot be undone.",
     "delete": "Delete",
     "cancel": "Cancel",
-    "delete_success": "Storage account deleted."
+    "delete_success": "Storage account deleted.",
+    "cors_enable_action": "Enable preview access",
+    "cors_enabled": "Preview access enabled for this bucket.",
+    "cors_failed": "Could not enable preview access. Check the storage key permissions."
   },
   "theme": {
     "toggle_theme": "Toggle theme",
@@ -67,7 +70,8 @@
     "drive": "My Drive",
     "login": "Login",
     "forgot_password": "Forgot Password",
-    "reset_password": "Reset Password"
+    "reset_password": "Reset Password",
+    "preview": "Preview"
   },
   "auth": {
     "brand": "Ponta Drive",
@@ -229,6 +233,13 @@
     "toast_starred": "Item starred.",
     "toast_unstarred": "Item unstarred.",
     "toast_download_started": "Preparing download...",
-    "toast_upload_completed": "Upload completed."
+    "toast_upload_completed": "Upload completed.",
+    "action_preview": "Preview",
+    "preview_back": "Back to Drive",
+    "preview_loading": "Loading preview...",
+    "preview_error": "Could not open the preview.",
+    "preview_unsupported": "This file type cannot be previewed. Download it to view it.",
+    "preview_too_large": "This file is too large to preview. Download it to view it.",
+    "preview_download": "Download"
   }
 }

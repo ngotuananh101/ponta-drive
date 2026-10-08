@@ -54,7 +54,10 @@
     "delete_confirm": "Tài khoản \"{name}\" sẽ bị gỡ khỏi Drive. Hành động này không thể hoàn tác.",
     "delete": "Xóa",
     "cancel": "Hủy",
-    "delete_success": "Đã xóa tài khoản lưu trữ."
+    "delete_success": "Đã xóa tài khoản lưu trữ.",
+    "cors_enable_action": "Bật quyền xem trước",
+    "cors_enabled": "Đã bật quyền xem trước cho bucket này.",
+    "cors_failed": "Không thể bật quyền xem trước. Hãy kiểm tra quyền của khóa lưu trữ."
   },
   "theme": {
     "toggle_theme": "Chuyển đổi giao diện",
@@ -67,7 +70,8 @@
     "drive": "Drive của tôi",
     "login": "Đăng nhập",
     "forgot_password": "Quên mật khẩu",
-    "reset_password": "Đặt lại mật khẩu"
+    "reset_password": "Đặt lại mật khẩu",
+    "preview": "Xem trước"
   },
   "auth": {
     "brand": "Ponta Drive",
@@ -229,6 +233,13 @@
     "toast_starred": "Đã gắn dấu sao.",
     "toast_unstarred": "Đã bỏ dấu sao.",
     "toast_download_started": "Đang chuẩn bị tải xuống...",
-    "toast_upload_completed": "Tải lên hoàn tất."
+    "toast_upload_completed": "Tải lên hoàn tất.",
+    "action_preview": "Xem trước",
+    "preview_back": "Quay lại Drive",
+    "preview_loading": "Đang tải bản xem trước...",
+    "preview_error": "Không thể mở bản xem trước.",
+    "preview_unsupported": "Định dạng tệp này không hỗ trợ xem trước. Hãy tải xuống để xem.",
+    "preview_too_large": "Tệp quá lớn để xem trước. Hãy tải xuống để xem.",
+    "preview_download": "Tải xuống"
   }
 }

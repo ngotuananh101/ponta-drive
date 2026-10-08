@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { drivePath, driveLocation } from '@/router/drivePaths'
+import { drivePath, driveLocation, previewPath, previewLocation } from '@/router/drivePaths'
 
 describe('drivePaths', () => {
   it('builds the account-root path without a folder', () => {
@@ -21,3 +21,19 @@ describe('drivePaths', () => {
     expect(drivePath(1, '')).toBe('/d/1')
   })
 })
+
+describe('previewPath', () => {
+  it('builds the preview URL from the account id and item uuid', () => {
+    expect(previewPath(3, 'abc')).toBe('/d/3/preview/abc')
+  })
+})
+
+describe('previewLocation', () => {
+  it('names the preview route with both params', () => {
+    expect(previewLocation(3, 'abc')).toEqual({
+      name: 'drive-preview',
+      params: { cloudId: 3, uuid: 'abc' },
+    })
+  })
+})
+
