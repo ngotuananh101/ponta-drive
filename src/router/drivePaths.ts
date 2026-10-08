@@ -15,3 +15,16 @@ export function driveLocation(cloudId: number, folderUuid?: string | null): Rout
     ? { name: 'drive-folder', params: { cloudId, folderUuid } }
     : { name: 'drive', params: { cloudId } }
 }
+
+/**
+ * Builds the preview URL for one file. Kept beside the drive paths so every
+ * navigation site produces the same shape.
+ */
+export function previewPath(cloudId: number, uuid: string): string {
+  return `/d/${cloudId}/preview/${uuid}`
+}
+
+export function previewLocation(cloudId: number, uuid: string): RouteLocationRaw {
+  return { name: 'drive-preview', params: { cloudId, uuid } }
+}
+

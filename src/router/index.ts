@@ -52,6 +52,13 @@ const router = createRouter({
       props: true,
       meta: { requiresAuth: true, titleKey: 'routes.drive' },
     },
+    {
+      path: '/d/:cloudId/preview/:uuid',
+      name: 'drive-preview',
+      component: () => import('@/views/PreviewView.vue'),
+      props: true,
+      meta: { requiresAuth: true, titleKey: 'routes.preview' },
+    },
   ],
 })
 
