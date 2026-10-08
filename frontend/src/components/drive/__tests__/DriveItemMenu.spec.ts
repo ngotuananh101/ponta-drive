@@ -87,4 +87,23 @@ describe('DriveItemMenu', () => {
     const wrapper = await clickMenuItem(viLocale.drive.action_move)
     expect(wrapper.emitted('move')?.[0]?.[0]).toEqual(testItem)
   })
+
+  it('offers a Preview action and emits preview with the item', async () => {
+    const wrapper = await clickMenuItem(viLocale.drive.action_preview)
+    expect(wrapper.emitted('preview')?.[0]?.[0]).toEqual(testItem)
+  })
+
+  it('shows the Preview action for a file, not for a folder', async () => {
+    const wrapper = mountMenu()
+    await wrapper.find('button').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(document.body.textContent).toContain(viLocale.drive.action_preview)
+    wrapper.unmount()
+
+    document.body.innerHTML = ''
+    const folderWrapper = mountMenu({ ...testItem, type: 'folder' })
+    await folderWrapper.find('button').trigger('click')
+    await folderWrapper.vm.$nextTick()
+    expect(document.body.textContent).not.toContain(viLocale.drive.action_preview)
+  })
 })
