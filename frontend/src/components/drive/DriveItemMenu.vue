@@ -9,6 +9,7 @@ import {
   Edit2,
   Trash2,
   FolderInput,
+  Eye,
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
@@ -29,6 +30,7 @@ const emit = defineEmits<{
   rename: [item: DriveItem]
   move: [item: DriveItem]
   delete: [item: DriveItem]
+  preview: [item: DriveItem]
 }>()
 
 const { t } = useI18n()
@@ -75,6 +77,15 @@ async function handleToggleStar() {
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" class="w-48 p-1.5 shadow-xl border-border">
+      <DropdownMenuItem
+        v-if="!isFolder"
+        class="cursor-pointer py-2 gap-2 text-sm"
+        @click="emit('preview', item)"
+      >
+        <Eye class="h-4 w-4" />
+        <span>{{ t('drive.action_preview') }}</span>
+      </DropdownMenuItem>
+
       <DropdownMenuItem
         v-if="!isFolder"
         class="cursor-pointer py-2 gap-2 text-sm"

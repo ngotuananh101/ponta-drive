@@ -92,3 +92,11 @@ export async function deleteCloudAccount(id: number): Promise<ApiResponse> {
 export async function syncCloudAccount(id: number): Promise<ApiResponse> {
   return fetchApi<ApiResponse>(`/v1/cloud-accounts/${id}/sync`, { method: 'POST' })
 }
+
+/**
+ * Asks the backend to apply the preview CORS rule to the account's bucket.
+ * Used by the manual button when the automatic step could not run.
+ */
+export async function ensureCloudAccountCors(id: number): Promise<ApiResponse> {
+  return fetchApi<ApiResponse>(`/v1/cloud-accounts/${id}/cors`, { method: 'POST' })
+}

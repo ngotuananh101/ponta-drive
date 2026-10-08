@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { PROVIDERS, providerMeta } from '@/components/cloud/providerMeta'
 import {
+  ensureCloudAccountCors,
   testCloudAccount,
   type CloudAccountPayload,
   type UpdateCloudAccountPayload,
@@ -184,6 +185,22 @@ async function runTest() {
     testError.value = e instanceof Error ? e.message : String(e)
   } finally {
     testing.value = false
+  }
+}
+
+const enablingCors = ref(false)
+
+async function enableCors() {
+  if (!props.editId) return
+  enablingCors.value = true
+  try {
+    const res = await ensureCloudAccountCors(props.editId)
+    toast.success(res.message || t('cloud.cors_enabled'))
+  } catch (e) {
+    // The backend already returns a localized, non-technical message.
+    toast.error(e instanceof Error ? e.message : t('cloud.cors_failed'))
+  } finally {
+    enablingCors.value = false
   }
 }
 
@@ -356,6 +373,15 @@ async function save() {
       </div>
 
       <DialogFooter class="gap-2">
+        <Button
+          v-if="isEdit"
+          data-test="enable-cors"
+          variant="outline"
+          :disabled="enablingCors"
+          @click="enableCors"
+        >
+          {{ t('cloud.cors_enable_action') }}
+        </Button>
         <Button v-if="step > 1 && !isEdit" variant="ghost" @click="step = (step - 1) as Step">
           <ArrowLeft class="h-4 w-4" />
           {{ t('cloud.back') }}

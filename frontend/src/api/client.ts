@@ -8,6 +8,16 @@ export interface ApiResponse<T = any> {
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
 
 /**
+ * Resolves an API path to an absolute URL the browser can fetch directly, such
+ * as the preview proxy path handed to the file-preview library. Uses the same
+ * base as `fetchApi` so both point at the same origin.
+ */
+export function apiUrl(path: string): string {
+  const normalised = path.startsWith('/') ? path : `/${path}`
+  return API_BASE_URL ? `${API_BASE_URL}${normalised}` : normalised
+}
+
+/**
  * An API failure. `errors` carries the backend's per-field validation map
  * (Laravel-style: `{ bucket: ["The bucket field is required."] }`) when the
  * response was a 422, so a form can attach each message to its own input.
