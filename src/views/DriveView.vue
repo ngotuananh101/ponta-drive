@@ -18,6 +18,7 @@ import DeleteDriveItemDialog from '@/components/drive/DeleteDriveItemDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
 import UploadDialog from '@/components/drive/UploadDialog.vue'
 import DriveItemMenu from '@/components/drive/DriveItemMenu.vue'
+import FilePreviewOverlay from '@/components/drive/FilePreviewOverlay.vue'
 import { useDriveItems } from '@/composables/useDriveItems'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { usePersistedRef } from '@/composables/usePersistedRef'
@@ -163,9 +164,27 @@ function openFolder(uuid: string) {
   void router.push(driveLocation(cloudAccountId.value, uuid))
 }
 
+// The preview opens as an overlay over the current listing rather than as a
+// route change, so the list stays mounted (and dimmed) behind it — the way
+// Google Drive previews a file in place. The shareable URL is the standalone
+// route, reached through the overlay's "open in new tab" action.
+const previewUuid = ref<string | null>(null)
+
 function openPreview(target: string | DriveItem) {
   const uuid = typeof target === 'string' ? target : target.uuid
   selectedItemId.value = null
+  previewUuid.value = uuid
+}
+
+function closePreview() {
+  previewUuid.value = null
+}
+
+function openPreviewStandalone() {
+  const uuid = previewUuid.value
+  if (!uuid) return
+  // Navigate only: this view unmounts, which tears the overlay down with it,
+  // so the list never flashes back between the two.
   void router.push(previewLocation(cloudAccountId.value, uuid))
 }
 
@@ -596,4 +615,13 @@ function openMove(item: DriveItem) {
       :initial-mode="uploadInitialMode"
     />
   </DashboardLayout>
+
+  <!-- In-place preview: a fullscreen dialog over the (dimmed) listing. It sits
+       outside the layout so it can cover the header and sidebar. -->
+  <FilePreviewOverlay
+    v-if="previewUuid"
+    :uuid="previewUuid"
+    @close="closePreview"
+    @open-standalone="openPreviewStandalone"
+  />
 </template>
