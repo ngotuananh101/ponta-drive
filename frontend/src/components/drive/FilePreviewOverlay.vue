@@ -33,7 +33,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="fixed inset-0 z-50 flex flex-col bg-neutral-900/90 backdrop-blur-sm"
+    class="fixed inset-0 z-50 flex flex-col bg-neutral-900/80 backdrop-blur-sm"
     role="dialog"
     aria-modal="true"
   >
