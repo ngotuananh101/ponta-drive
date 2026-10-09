@@ -188,7 +188,7 @@ async function handleLogout() {
   <div class="h-screen w-full bg-background text-foreground flex overflow-hidden">
     <!-- Left: Full Height Sidebar -->
     <aside
-      class="w-60 border-r border-border bg-card/60 flex flex-col shrink-0 h-screen transition-transform duration-200 fixed lg:static inset-y-0 left-0 z-40"
+      class="w-52 border-r border-border bg-card/60 flex flex-col shrink-0 h-screen transition-transform duration-200 fixed lg:static inset-y-0 left-0 z-40"
       :class="{
         '-translate-x-full lg:translate-x-0': !isMobileMenuOpen,
         'translate-x-0 shadow-2xl': isMobileMenuOpen,
