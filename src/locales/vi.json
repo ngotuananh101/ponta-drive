@@ -235,11 +235,12 @@
     "toast_download_started": "Đang chuẩn bị tải xuống...",
     "toast_upload_completed": "Tải lên hoàn tất.",
     "action_preview": "Xem trước",
-    "preview_back": "Quay lại Drive",
     "preview_loading": "Đang tải bản xem trước...",
     "preview_error": "Không thể mở bản xem trước.",
     "preview_unsupported": "Định dạng tệp này không hỗ trợ xem trước. Hãy tải xuống để xem.",
     "preview_too_large": "Tệp quá lớn để xem trước. Hãy tải xuống để xem.",
-    "preview_download": "Tải xuống"
+    "preview_download": "Tải xuống",
+    "preview_close": "Đóng xem trước",
+    "preview_open_tab": "Mở trong tab mới"
   }
 }
