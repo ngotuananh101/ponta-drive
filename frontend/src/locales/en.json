@@ -235,11 +235,12 @@
     "toast_download_started": "Preparing download...",
     "toast_upload_completed": "Upload completed.",
     "action_preview": "Preview",
-    "preview_back": "Back to Drive",
     "preview_loading": "Loading preview...",
     "preview_error": "Could not open the preview.",
     "preview_unsupported": "This file type cannot be previewed. Download it to view it.",
     "preview_too_large": "This file is too large to preview. Download it to view it.",
-    "preview_download": "Download"
+    "preview_download": "Download",
+    "preview_close": "Close preview",
+    "preview_open_tab": "Open in new tab"
   }
 }
