@@ -183,7 +183,8 @@ function closePreview() {
 function openPreviewStandalone() {
   const uuid = previewUuid.value
   if (!uuid) return
-  previewUuid.value = null
+  // Navigate only: this view unmounts, which tears the overlay down with it,
+  // so the list never flashes back between the two.
   void router.push(previewLocation(cloudAccountId.value, uuid))
 }
 
