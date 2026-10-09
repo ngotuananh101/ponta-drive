@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { listDriveItems, type DriveItem } from '@/api/driveItems'
 import { useDriveItemsStore } from '@/stores/driveItems'
 import { ApiError } from '@/api/client'
@@ -185,7 +186,8 @@ async function submit() {
         </DialogDescription>
       </DialogHeader>
 
-      <div class="max-h-64 overflow-y-auto rounded-md border border-border p-1">
+      <ScrollArea class="max-h-64 rounded-md border border-border">
+        <div class="p-1">
         <!-- Root destination (always selectable, defaults to null) -->
         <button
           type="button"
@@ -249,7 +251,8 @@ async function submit() {
             {{ t('drive.move_empty') }}
           </p>
         </template>
-      </div>
+        </div>
+      </ScrollArea>
 
       <p v-if="error" class="text-xs text-destructive rounded-md bg-destructive/10 p-2">
         {{ error }}

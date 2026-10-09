@@ -19,6 +19,7 @@ import AddCloudDialog from '@/components/cloud/AddCloudDialog.vue'
 import DeleteCloudDialog from '@/components/cloud/DeleteCloudDialog.vue'
 import { providerMeta } from '@/components/cloud/providerMeta'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -185,7 +186,7 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="h-screen w-full bg-background text-foreground flex overflow-hidden">
+  <div class="relative h-screen w-full bg-background text-foreground flex overflow-hidden">
     <!-- Left: Full Height Sidebar -->
     <aside
       class="w-52 border-r border-border bg-card/60 flex flex-col shrink-0 h-screen transition-transform duration-200 fixed lg:static inset-y-0 left-0 z-40"
@@ -253,8 +254,11 @@ async function handleLogout() {
         </DropdownMenu>
       </div>
 
-      <!-- Navigation Links -->
-      <nav class="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
+      <!-- Navigation Links. Wrapped in a ScrollArea so the absolutely
+           positioned `.sr-only` labels inside it cannot escape to the
+           document and create a second, page-level scrollbar. -->
+      <ScrollArea class="flex-1 min-h-0">
+        <nav class="px-2 py-1 space-y-0.5">
         <template v-for="item in navItems" :key="item.id">
           <!-- Standard item (not my_drive) -->
           <button
@@ -443,7 +447,8 @@ async function handleLogout() {
             </div>
           </div>
         </template>
-      </nav>
+        </nav>
+      </ScrollArea>
 
       <!-- Storage Widget (Bottom Sidebar) - Only shown in Drive -->
       <div v-if="isDriveView" class="p-3.5 border-t border-border/60 bg-card/30">
@@ -568,8 +573,16 @@ async function handleLogout() {
         </div>
       </header>
 
-      <!-- Main Content Area -->
-      <main class="flex-1 overflow-y-auto bg-background p-4 sm:p-6 min-h-0 flex flex-col">
+      <!-- Main Content Area. The ScrollArea owns the scrolling so the
+           absolutely positioned `.sr-only` labels inside the page cannot
+           anchor to the document. reka-ui inserts a plain wrapper between the
+           viewport and the slot; the arbitrary variants make that wrapper a
+           full-height flex column, preserving the `flex-1 min-h-0` chain the
+           drive listing relies on to bound its own inner scroll area. -->
+      <ScrollArea
+        class="flex-1 min-h-0 bg-background [&_[data-reka-scroll-area-viewport]>div]:h-full [&_[data-reka-scroll-area-viewport]>div]:flex [&_[data-reka-scroll-area-viewport]>div]:flex-col"
+      >
+        <main class="flex-1 flex flex-col p-4 sm:p-6 min-h-0">
         <div class="w-full flex-1 flex flex-col min-h-0">
           <!-- Mobile Search Bar (Only shown in Drive on mobile screen < sm) -->
           <div v-if="isDriveView" class="block sm:hidden mb-4 shrink-0">
@@ -596,7 +609,8 @@ async function handleLogout() {
 
           <slot />
         </div>
-      </main>
+        </main>
+      </ScrollArea>
     </div>
   </div>
 

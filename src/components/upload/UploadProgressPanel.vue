@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload, ChevronDown, ChevronUp, X, FileText, CheckCircle2, AlertCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useUploadStore } from '@/stores/upload'
 
 const { t } = useI18n()
@@ -54,7 +55,8 @@ const completedCount = computed(
       </div>
     </div>
 
-    <div v-if="!collapsed" class="max-h-60 overflow-y-auto p-2 space-y-1.5">
+    <ScrollArea v-if="!collapsed" class="max-h-60">
+      <div class="p-2 space-y-1.5">
       <div
         v-for="item in uploadStore.uploadQueue"
         :key="item.id"
@@ -89,6 +91,7 @@ const completedCount = computed(
           </Button>
         </div>
       </div>
-    </div>
+      </div>
+    </ScrollArea>
   </div>
 </template>
