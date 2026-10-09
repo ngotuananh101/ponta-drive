@@ -121,6 +121,34 @@ describe('FilePreviewContent', () => {
     expect(files[0].url).toBe(apiUrl('/v1/drive/items/abc/content'))
   })
 
+  it('routes a proxied fetch-based file (pdf) through the authenticated fetcher', async () => {
+    localStorage.setItem('token', 'tok-123')
+    vi.spyOn(api, 'getDriveItemPreview').mockResolvedValue({
+      status: 'ok',
+      data: {
+        strategy: 'proxy',
+        url: '/v1/drive/items/abc/content',
+        download_url: 'https://cdn.example/abc',
+        item: { ...item, name: 'report.pdf', mime_type: 'application/pdf', extension: 'pdf' },
+        reason: '',
+      },
+    })
+
+    const wrapper = mountContent()
+    await flushPromises()
+
+    const embed = wrapper.findComponent({ name: 'FilePreviewEmbed' })
+    // A fetch-based file must be fetched as a blob so the library runs it
+    // through `fetcher` (which merges the Authorization header). Without this,
+    // the PDF renderer hands the raw URL to pdf.js and the request goes out
+    // unauthenticated, so the proxy answers 401.
+    const shouldFetchAsBlob = embed.props('shouldFetchAsBlob') as
+      | ((file: { type: string }) => boolean)
+      | undefined
+    expect(typeof shouldFetchAsBlob).toBe('function')
+    expect(shouldFetchAsBlob!({ type: 'application/pdf' })).toBe(true)
+  })
+
   it('emits close when the close button is clicked', async () => {
     vi.spyOn(api, 'getDriveItemPreview').mockResolvedValue({
       status: 'ok',

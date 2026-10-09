@@ -32,9 +32,6 @@ const preview = shallowRef<DriveItemPreview | null>(null)
 // rendered, so the fallback card never pays for it.
 const Embed = shallowRef<Component | null>(null)
 
-const isMedia = (mime: string) =>
-  mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/')
-
 /** The library file descriptor: absolute URL plus the name/type it detects by. */
 const previewFiles = computed(() => {
   const data = preview.value
@@ -62,8 +59,18 @@ const requestInit = computed(() =>
     : undefined,
 )
 
+/**
+ * Every proxied file must be fetched as a blob, because that is the only path
+ * that runs through the library's `fetcher`, where `requestInit` (the bearer
+ * token) is merged in. The alternative — letting a renderer take the raw URL —
+ * bypasses the fetcher, so the request goes out unauthenticated and the proxy
+ * answers 401. That is not media-only: PDFs and office documents are proxied
+ * too, and their renderers fetch the URL themselves. Direct (cross-origin)
+ * files must NOT be fetched as a blob: the fetcher would send no token anyway,
+ * and pdf.js and the media elements load the URL fine without one.
+ */
 const shouldFetchAsBlob = computed(() =>
-  preview.value?.strategy === 'proxy' ? (file: { type: string }) => isMedia(file.type) : undefined,
+  preview.value?.strategy === 'proxy' ? () => true : undefined,
 )
 
 const fallbackMessage = computed(() =>
