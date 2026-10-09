@@ -10,6 +10,7 @@ import { useDriveSearchStore } from '@/stores/driveSearch'
 import { storeToRefs } from 'pinia'
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import SyncCloudButton from '@/components/cloud/SyncCloudButton.vue'
 import DriveItemIcon from '@/components/drive/DriveItemIcon.vue'
 import NewFolderDialog from '@/components/drive/NewFolderDialog.vue'
@@ -395,8 +396,11 @@ function openMove(item: DriveItem) {
               </div>
             </div>
 
-            <!-- Table Rows -->
-            <div v-if="items.length > 0" class="divide-y divide-border/60 overflow-y-auto flex-1 min-h-0">
+            <!-- Table Rows. Wrapped in a ScrollArea so the absolutely
+                 positioned `.sr-only` labels inside the rows cannot escape to
+                 the document and add a second, page-level scrollbar. -->
+            <ScrollArea v-if="items.length > 0" class="flex-1 min-h-0">
+              <div class="divide-y divide-border/60">
               <div
                 v-for="item in items"
                 :key="item.uuid"
@@ -453,7 +457,8 @@ function openMove(item: DriveItem) {
                 <Loader2 class="h-4 w-4 animate-spin" />
                 {{ t('common.loading') }}
               </div>
-            </div>
+              </div>
+            </ScrollArea>
 
             <div v-else-if="error" class="flex flex-col items-center gap-3 py-6 text-sm">
               <p class="text-destructive">{{ error }}</p>
@@ -469,8 +474,11 @@ function openMove(item: DriveItem) {
             </div>
           </div>
 
-          <!-- GRID VIEW -->
-          <div v-else class="space-y-6 overflow-y-auto flex-1 min-h-0 pr-1">
+          <!-- GRID VIEW. Wrapped in a ScrollArea for the same reason as the
+               list rows above: the `.sr-only` labels in the cards must not
+               escape to the document. -->
+          <ScrollArea v-else class="flex-1 min-h-0">
+            <div class="space-y-6 pr-1">
             <!-- Folders Section -->
             <div>
               <h3 class="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 px-1">
@@ -542,7 +550,8 @@ function openMove(item: DriveItem) {
               <FolderOpen class="h-8 w-8" />
               {{ search ? t('drive.search_no_results') : t('drive.empty_drive_title') }}
             </div>
-          </div>
+            </div>
+          </ScrollArea>
         </div>
 
         <!-- Details Sidebar Panel (Toggleable, hidden on mobile) -->

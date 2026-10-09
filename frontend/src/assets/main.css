@@ -125,4 +125,15 @@
     @apply bg-background text-foreground;
     @apply font-sans;
     }
+
+  /* reka-ui's ScrollArea viewport owns the scrolling, but it ships
+     `position: static`. An absolutely positioned descendant — Tailwind's
+     `.sr-only` is `position: absolute` — then anchors to an ancestor that is
+     not the element actually clipping the overflow, escapes the viewport and
+     stretches the nearest scrollable ancestor instead. The page then grows a
+     second, outer scrollbar on top of the viewport's own. Making the viewport
+     a containing block keeps such descendants inside the box that clips them. */
+  [data-reka-scroll-area-viewport] {
+    position: relative;
+    }
 }

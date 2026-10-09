@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { humanizeBytes } from '@/lib/format'
 import { useUploadStore, type UploadMethod } from '@/stores/upload'
 
@@ -216,26 +217,28 @@ function handleStart() {
               {{ t('drive.upload_clear_files') }}
             </Button>
           </div>
-          <ul class="max-h-40 overflow-y-auto space-y-1 pr-1">
-            <li
-              v-for="(file, index) in selectedFiles"
-              :key="`${file.name}-${index}`"
-              class="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs"
-            >
-              <FileText class="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span class="truncate flex-1 text-foreground">{{ file.name }}</span>
-              <span class="text-muted-foreground font-mono shrink-0">{{ humanizeBytes(file.size) }}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                class="h-5 w-5 text-muted-foreground hover:text-destructive"
-                :aria-label="t('drive.upload_remove_file')"
-                @click="removeFile(index)"
+          <ScrollArea class="max-h-40">
+            <ul class="space-y-1 pr-1">
+              <li
+                v-for="(file, index) in selectedFiles"
+                :key="`${file.name}-${index}`"
+                class="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs"
               >
-                <X class="h-3 w-3" />
-              </Button>
-            </li>
-          </ul>
+                <FileText class="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span class="truncate flex-1 text-foreground">{{ file.name }}</span>
+                <span class="text-muted-foreground font-mono shrink-0">{{ humanizeBytes(file.size) }}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-5 w-5 text-muted-foreground hover:text-destructive"
+                  :aria-label="t('drive.upload_remove_file')"
+                  @click="removeFile(index)"
+                >
+                  <X class="h-3 w-3" />
+                </Button>
+              </li>
+            </ul>
+          </ScrollArea>
         </div>
       </div>
 
