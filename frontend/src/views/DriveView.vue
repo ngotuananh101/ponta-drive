@@ -381,7 +381,7 @@ function openMove(item: DriveItem) {
             <div
               class="grid grid-cols-12 px-4 py-2 border-b border-border text-xs font-semibold text-muted-foreground select-none shrink-0"
             >
-              <div class="col-span-6 sm:col-span-6 flex items-center gap-1.5">
+              <div class="col-span-6 sm:col-span-5 flex items-center gap-1.5">
                 <span>{{ t('drive.table_name') }}</span>
               </div>
               <div class="hidden sm:block sm:col-span-2">
@@ -391,9 +391,12 @@ function openMove(item: DriveItem) {
                 <span>{{ t('drive.table_modified') }}</span>
                 <ArrowDown class="h-3.5 w-3.5" />
               </div>
-              <div class="hidden sm:block sm:col-span-1 text-right pr-6">
+              <div class="hidden sm:block sm:col-span-1 text-right">
                 <span>{{ t('drive.table_size') }}</span>
               </div>
+              <!-- Actions column: header intentionally left empty so the row
+                   menu reads as its own column, separated from File size. -->
+              <div class="col-span-2 sm:col-span-1"></div>
             </div>
 
             <!-- Table Rows. Wrapped in a ScrollArea so the absolutely
@@ -414,7 +417,7 @@ function openMove(item: DriveItem) {
                 @dblclick="item.type === 'folder' ? openFolder(item.uuid) : openPreview(item.uuid)"
               >
                 <!-- Column: Name & Icon -->
-                <div class="col-span-6 sm:col-span-6 flex items-center gap-2.5 min-w-0 pr-2">
+                <div class="col-span-6 sm:col-span-5 flex items-center gap-2.5 min-w-0 pr-2">
                   <DriveItemIcon :item="item" />
                   <span class="truncate font-medium text-foreground text-[13px]">{{ item.name }}</span>
                 </div>
@@ -440,12 +443,15 @@ function openMove(item: DriveItem) {
                   {{ formatDate(item.updated_at) }}
                 </div>
 
-                <!-- Column: File size & Actions -->
-                <div class="col-span-2 sm:col-span-1 flex items-center justify-end gap-1">
-                  <span class="hidden sm:inline-block text-xs text-muted-foreground mr-2 font-mono">
+                <!-- Column: File size -->
+                <div class="hidden sm:block sm:col-span-1 text-right">
+                  <span class="text-xs text-muted-foreground font-mono">
                     {{ formatSize(item.size) }}
                   </span>
+                </div>
 
+                <!-- Column: Actions (header is empty) -->
+                <div class="col-span-2 sm:col-span-1 flex items-center justify-end gap-1">
                   <DriveItemMenu :item="item" @rename="openRename" @move="openMove" @delete="openDelete" @preview="openPreview" />
                 </div>
               </div>
