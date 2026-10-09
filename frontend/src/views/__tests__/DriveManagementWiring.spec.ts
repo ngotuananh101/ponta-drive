@@ -120,6 +120,42 @@ describe('DriveView action wiring', () => {
     await vi.waitFor(() => expect(document.body.textContent).toContain(viLocale.drive.move_title))
   })
 
+  it('opens the in-place preview overlay from the menu without leaving the list', async () => {
+    vi.spyOn(driveApi, 'getDriveItemPreview').mockResolvedValue({
+      status: 'ok',
+      data: {
+        strategy: 'fallback',
+        url: '',
+        download_url: 'https://cdn.example/f-1',
+        item: ITEM,
+        reason: 'unsupported',
+      },
+    })
+    const wrapper = await mountDriveView([ITEM])
+
+    await vi.waitFor(() => {
+      expect(
+        Array.from(document.querySelectorAll('button')).some((b) => b.textContent?.includes('Thao tác')),
+      ).toBe(true)
+    })
+
+    const trigger = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Thao tác'),
+    ) as HTMLElement
+    trigger.click()
+    await wrapper.vm.$nextTick()
+
+    const previewItem = [...document.querySelectorAll('[role="menuitem"]')].find((el) =>
+      el.textContent?.includes(viLocale.drive.action_preview),
+    ) as HTMLElement
+    previewItem.click()
+    await wrapper.vm.$nextTick()
+
+    // The dialog appears over the still-mounted list (the grid heading stays).
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
+    expect(document.body.textContent).toContain(viLocale.drive.type_folder)
+  })
+
   it('reloads the list with the search term set in the store', async () => {
     const listSpy = vi.spyOn(driveApi, 'listDriveItems')
     await mountDriveView([ITEM])
