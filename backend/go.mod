@@ -17,6 +17,7 @@ require (
 	github.com/goravel/mysql v1.18.0
 	github.com/goravel/openai v1.18.0
 	github.com/goravel/postgres v1.18.0
+	github.com/goravel/sqlite v1.18.0
 	github.com/stretchr/testify v1.11.1
 	gorm.io/gorm v1.31.2
 )
@@ -85,7 +86,6 @@ require (
 	github.com/goforj/godump v1.9.1 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/gookit/color v1.6.0 // indirect
-	github.com/goravel/sqlite v1.18.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
