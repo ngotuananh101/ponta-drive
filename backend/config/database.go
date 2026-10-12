@@ -4,6 +4,7 @@ import (
 	"github.com/goravel/framework/contracts/database/driver"
 	mysqlfacades "github.com/goravel/mysql/facades"
 	postgresfacades "github.com/goravel/postgres/facades"
+	sqlitefacades "github.com/goravel/sqlite/facades"
 	"ponta_drive/app/facades"
 )
 
@@ -26,6 +27,15 @@ func init() {
 				"schema":   config.Env("DB_SCHEMA", "public"),
 				"via": func() (driver.Driver, error) {
 					return postgresfacades.Postgres("postgres")
+				},
+			},
+			"sqlite": map[string]any{
+				"driver":   "sqlite",
+				"database": config.Env("DB_DATABASE", "database/database.sqlite"),
+				"prefix":   "",
+				"singular": false,
+				"via": func() (driver.Driver, error) {
+					return sqlitefacades.Sqlite("sqlite")
 				},
 			},
 			"mysql": map[string]any{
