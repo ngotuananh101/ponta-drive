@@ -17,6 +17,7 @@ require (
 	github.com/goravel/mysql v1.18.0
 	github.com/goravel/openai v1.18.0
 	github.com/goravel/postgres v1.18.0
+	github.com/goravel/sqlite v1.18.0
 	github.com/stretchr/testify v1.11.1
 	gorm.io/gorm v1.31.2
 )
@@ -109,6 +110,9 @@ require (
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
+	github.com/ncruces/go-sqlite3 v0.25.0 // indirect
+	github.com/ncruces/go-sqlite3/gormlite v0.24.0 // indirect
+	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/openai/openai-go/v3 v3.39.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -129,6 +133,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spf13/viper v1.21.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
+	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect

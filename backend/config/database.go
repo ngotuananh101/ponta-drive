@@ -1,11 +1,34 @@
 package config
 
 import (
+	configcontract "github.com/goravel/framework/contracts/config"
 	"github.com/goravel/framework/contracts/database/driver"
 	mysqlfacades "github.com/goravel/mysql/facades"
 	postgresfacades "github.com/goravel/postgres/facades"
+	sqlitefacades "github.com/goravel/sqlite/facades"
 	"ponta_drive/app/facades"
 )
+
+// mysqlConnection builds a MySQL-compatible connection definition. The name
+// selects which registered driver instance to resolve, so the "mysql" and
+// "mariadb" connections share one definition.
+func mysqlConnection(config configcontract.Config, name string) map[string]any {
+	return map[string]any{
+		"driver":   "mysql",
+		"host":     config.Env("DB_HOST", "127.0.0.1"),
+		"port":     config.Env("DB_PORT", "3306"),
+		"database": config.Env("DB_DATABASE", "forge"),
+		"username": config.Env("DB_USERNAME", "forge"),
+		"password": config.Env("DB_PASSWORD", ""),
+		"charset":  config.Env("DB_CHARSET", "utf8mb4"),
+		"loc":      "Local",
+		"prefix":   "",
+		"singular": false,
+		"via": func() (driver.Driver, error) {
+			return mysqlfacades.Mysql(name)
+		},
+	}
+}
 
 func init() {
 	config := facades.Config()
@@ -28,36 +51,17 @@ func init() {
 					return postgresfacades.Postgres("postgres")
 				},
 			},
-			"mysql": map[string]any{
-				"driver":   "mysql",
-				"host":     config.Env("DB_HOST", "127.0.0.1"),
-				"port":     config.Env("DB_PORT", "3306"),
-				"database": config.Env("DB_DATABASE", "forge"),
-				"username": config.Env("DB_USERNAME", "forge"),
-				"password": config.Env("DB_PASSWORD", ""),
-				"charset":  config.Env("DB_CHARSET", "utf8mb4"),
-				"loc":      "Local",
+			"sqlite": map[string]any{
+				"driver":   "sqlite",
+				"database": config.Env("DB_DATABASE", "database/database.sqlite"),
 				"prefix":   "",
 				"singular": false,
 				"via": func() (driver.Driver, error) {
-					return mysqlfacades.Mysql("mysql")
+					return sqlitefacades.Sqlite("sqlite")
 				},
 			},
-			"mariadb": map[string]any{
-				"driver":   "mysql",
-				"host":     config.Env("DB_HOST", "127.0.0.1"),
-				"port":     config.Env("DB_PORT", "3306"),
-				"database": config.Env("DB_DATABASE", "forge"),
-				"username": config.Env("DB_USERNAME", "forge"),
-				"password": config.Env("DB_PASSWORD", ""),
-				"charset":  config.Env("DB_CHARSET", "utf8mb4"),
-				"loc":      "Local",
-				"prefix":   "",
-				"singular": false,
-				"via": func() (driver.Driver, error) {
-					return mysqlfacades.Mysql("mariadb")
-				},
-			},
+			"mysql":   mysqlConnection(config, "mysql"),
+			"mariadb": mysqlConnection(config, "mariadb"),
 		},
 		// Pool configuration
 		"pool": map[string]any{
