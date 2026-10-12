@@ -1,0 +1,35 @@
+# Environment
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Dependencies
+node_modules
+frontend/node_modules
+
+# Build outputs
+dist
+tmp
+backend/tmp
+build-errors.log
+backend/build-errors.log
+
+# Storage
+backend/storage
+storage
+
+# Superpowers scratch
+.superpowers
+
+# Editor & OS
+.idea
+.vscode
+.DS_Store
+*.local
+
+# Agent runtime artifacts (Claude Code)
+.remember
+.claude

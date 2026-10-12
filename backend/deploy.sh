@@ -51,9 +51,12 @@ if [ ! -f .env ]; then
 fi
 
 # 2. Cập nhật mã nguồn từ Git
+# Trong monorepo, `git reset --hard` tác động lên TOÀN BỘ worktree bất kể cwd,
+# nên phải chạy các lệnh git từ repository root để không reset nhầm frontend.
+REPO_ROOT="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel)"
 log_info "1/5. Kéo mã nguồn mới nhất từ Git origin/$BRANCH..."
-git fetch origin "$BRANCH"
-git reset --hard "origin/$BRANCH"
+git -C "$REPO_ROOT" fetch origin "$BRANCH"
+git -C "$REPO_ROOT" reset --hard "origin/$BRANCH"
 log_success "Đã cập nhật mã nguồn thành công."
 
 # 3. Kiểm tra và tải các thư viện dependencies
