@@ -35,13 +35,13 @@ func (r *M20261004000000AddUUIDToCloudAccounts) Up() error {
 
 	// Backfill: one uuid per existing row.
 	var ids []uint
-	if err := facades.Orm().Query().Table("cloud_accounts").
+	if err := facades.Schema().Orm().Query().Table("cloud_accounts").
 		Where("uuid IS NULL OR uuid = ''").
 		Pluck("id", &ids); err != nil {
 		return err
 	}
 	for _, id := range ids {
-		_, _ = facades.Orm().Query().Table("cloud_accounts").
+		_, _ = facades.Schema().Orm().Query().Table("cloud_accounts").
 			Where("id", id).
 			Update("uuid", uuid.New().String())
 	}
