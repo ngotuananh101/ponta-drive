@@ -6,9 +6,11 @@ A multi-cloud drive application.
 
 | Path | Component | Stack |
 |---|---|---|
-| `backend/` | API | Go 1.27 / Goravel, Docker |
-| `frontend/` | Web app | Vue 3 + Vite + Bun |
+| `backend/` | API | Go 1.25+ / Goravel, Docker |
+| `frontend/` | Web app | Vue 3 + Vite + Bun 1.4.2 |
 | `docs/superpowers/` | Specs and plans | Markdown |
+| `.github/workflows/` | CI | GitHub Actions (path-filtered) |
+| `run.bat` | Local dev launcher (Windows) | Batch |
 
 ## Development
 

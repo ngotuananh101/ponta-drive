@@ -180,21 +180,27 @@ git reset --hard "origin/$BRANCH"
 
 In the monorepo, `git reset --hard` acts on the **whole worktree regardless of
 the current directory**, so a backend deploy would also reset `frontend/` and
-the root files. Fix — run the git operations from the repository root and the
-build operations from `backend/`:
+the root files. Merely running the git operations from the repository root does
+**not** fix this — `git reset --hard` with no pathspec still resets the entire
+worktree. The reset must be scoped to `backend/`:
 
 ```bash
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel)"
 
 git -C "$REPO_ROOT" fetch origin "$BRANCH"
-git -C "$REPO_ROOT" reset --hard "origin/$BRANCH"
+git -C "$REPO_ROOT" checkout "origin/$BRANCH" -- backend/
+# `checkout <ref> -- <path>` does not delete files removed upstream; prune them.
+git -C "$REPO_ROOT" diff --name-only -z --diff-filter=D HEAD "origin/$BRANCH" -- backend/ \
+    | while IFS= read -r -d '' f; do rm -f "$REPO_ROOT/$f"; done
 
 cd "$PROJECT_DIR"          # all go build / artisan / docker-compose steps unchanged
 ```
 
-Everything else in `deploy.sh` (go build, `artisan migrate`, `docker-compose
-down/up`) already runs relative to `PROJECT_DIR` and needs no change.
+This leaves `frontend/` and the root files untouched by a backend deploy, which
+is the intended behaviour. Everything else in `deploy.sh` (go build, `artisan
+migrate`, `docker-compose down/up`) already runs relative to `PROJECT_DIR` and
+needs no change.
 
 ### 5.2 Unchanged files
 
@@ -302,6 +308,12 @@ dashboard-side build root must change.
 3. **Unmerged backend branch.** `origin/feat/cloud-account-id` is a breaking
    change kept as `backend/feat/cloud-account-id`; its future is a separate
    decision (merge, rebase, or drop).
+   **Actual outcome (deviation):** this branch was NOT carried over. It had
+   already been squash-merged into `main` as PR #8 (squash commit `e959c51`,
+   `feat(api)!: identify cloud accounts by numeric id instead of uuid`), so no
+   work is lost; `main` is a content superset. The original pre-squash tip is
+   preserved in the backup mirror as `refs/pull/8/head` (`1899057`) if the exact
+   branch history is ever needed. Task 5 was therefore dropped.
 4. **Commit SHAs change** for all commits (filter-repo rewrite). References to
    old SHAs in `docs/` and `.remember/` become historical notes only.
 5. **Backend CI tests need a live MariaDB.** The existing backend test suite

@@ -246,7 +246,14 @@ Expected: `2`.
 
 ---
 
-### Task 5: Preserve the unmerged backend branch
+### Task 5: Preserve the unmerged backend branch — DROPPED (deviation)
+
+> **Deviation (actual outcome):** this task was NOT executed. The branch
+> `feat/cloud-account-id` had already been squash-merged into `main` as PR #8
+> (squash commit `e959c51`), so carrying it over would have preserved nothing
+> new — `main` is a content superset. The original pre-squash tip survives in
+> the backup mirror as `refs/pull/8/head` (`1899057`). See spec §9 risk 3 and
+> the ledger ruling (Task 1/5). The steps below are kept for the record.
 
 **Files:**
 - Create: branch `backend/feat/cloud-account-id` in `D:/Source/ponta/_migration/ponta-drive-monorepo/`
@@ -471,7 +478,7 @@ jobs:
       - run: bun run build
 ```
 
-- [ ] **Step 8: Fix `backend/deploy.sh` — make git operations run from the repo root**
+- [ ] **Step 8: Fix `backend/deploy.sh` — scope the source sync to `backend/`**
 
 Replace the existing block in `/d/Source/ponta/_migration/ponta-drive-monorepo/backend/deploy.sh`:
 
@@ -487,12 +494,17 @@ with:
 
 ```bash
 # 2. Cập nhật mã nguồn từ Git
-# Trong monorepo, `git reset --hard` tác động lên TOÀN BỘ worktree bất kể cwd,
-# nên phải chạy các lệnh git từ repository root để không reset nhầm frontend.
+# Trong monorepo, `git reset --hard` (không kèm pathspec) reset TOÀN BỘ worktree —
+# cả frontend/ lẫn các file ở root — bất kể cwd. Đây là deploy backend, nên chỉ
+# đồng bộ đúng thư mục backend/ từ origin/$BRANCH để không đụng tới frontend.
 REPO_ROOT="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel)"
 log_info "1/5. Kéo mã nguồn mới nhất từ Git origin/$BRANCH..."
 git -C "$REPO_ROOT" fetch origin "$BRANCH"
-git -C "$REPO_ROOT" reset --hard "origin/$BRANCH"
+git -C "$REPO_ROOT" checkout "origin/$BRANCH" -- backend/
+# `git checkout <ref> -- <path>` không tự xoá file đã bị xoá ở upstream,
+# nên xoá thủ công các file có trong HEAD mà không còn ở origin/$BRANCH.
+git -C "$REPO_ROOT" diff --name-only -z --diff-filter=D HEAD "origin/$BRANCH" -- backend/ \
+    | while IFS= read -r -d '' f; do rm -f "$REPO_ROOT/$f"; done
 log_success "Đã cập nhật mã nguồn thành công."
 ```
 
@@ -500,10 +512,10 @@ log_success "Đã cập nhật mã nguồn thành công."
 
 ```bash
 bash -n /d/Source/ponta/_migration/ponta-drive-monorepo/backend/deploy.sh && echo "SYNTAX OK"
-grep -n 'git -C "$REPO_ROOT" reset --hard' /d/Source/ponta/_migration/ponta-drive-monorepo/backend/deploy.sh
+grep -n 'checkout "origin/$BRANCH" -- backend/' /d/Source/ponta/_migration/ponta-drive-monorepo/backend/deploy.sh
 ```
 
-Expected: `SYNTAX OK`, then a line showing the `git -C "$REPO_ROOT" reset --hard` command.
+Expected: `SYNTAX OK`, then a line showing the scoped `checkout "origin/$BRANCH" -- backend/` command.
 
 - [ ] **Step 10: Commit the root assets and the deploy fix**
 

@@ -16,6 +16,8 @@ tmp
 backend/tmp
 build-errors.log
 backend/build-errors.log
+backend/main
+backend/main.new
 
 # Storage
 backend/storage
