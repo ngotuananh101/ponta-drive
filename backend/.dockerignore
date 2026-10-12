@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+storage
+tmp
+*.test
+README.md
+README_zh.md
+LICENSE
