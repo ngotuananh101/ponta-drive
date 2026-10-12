@@ -6,10 +6,9 @@ A multi-cloud drive application.
 
 | Path | Component | Stack |
 |---|---|---|
-| `backend/` | API | Go 1.25+ / Goravel, Docker |
+| `backend/` | API | Go 1.25+ / Goravel |
 | `frontend/` | Web app | Vue 3 + Vite + Bun 1.4.2 |
 | `docs/superpowers/` | Specs and plans | Markdown |
-| `.github/workflows/` | CI | GitHub Actions (path-filtered) |
 | `run.bat` | Local dev launcher (Windows) | Batch |
 
 ## Development
@@ -42,10 +41,6 @@ bun run dev
 
 ## Deployment
 
-- Backend: `backend/deploy.sh` (run from `backend/`; it operates on the repo root).
-- Frontend: Cloudflare Pages / Vercel with build root `frontend/`.
-
-## CI
-
-`.github/workflows/backend.yml` and `.github/workflows/frontend.yml` run only
-when their subtree changes.
+Deployment is manual; no CI or deploy scripts are kept in this repository.
+Build each component from its own subdirectory (`backend/`, `frontend/`) and
+publish it with whatever pipeline you operate outside the repo.
