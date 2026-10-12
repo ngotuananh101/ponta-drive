@@ -1,0 +1,26 @@
+services:
+  api:
+    build: ./backend
+    env_file:
+      - .env
+    environment:
+      ROLE: api
+      APP_HOST: 0.0.0.0
+      APP_PORT: "3000"
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /app/storage/database.sqlite
+      QUEUE_CONNECTION: sync
+    volumes:
+      - api_storage:/app/storage
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped
+
+volumes:
+  api_storage:
