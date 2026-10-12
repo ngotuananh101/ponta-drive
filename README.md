@@ -60,7 +60,11 @@ cp .env.example .env        # set APP_KEY, JWT_SECRET, DB_* values
 docker compose -f docker-compose.full.yml up -d --build
 ```
 
-Add `--profile tls` only on a host with no nginx of its own.
+On a host with no nginx of its own, add the opt-in Caddy profile:
+
+```bash
+docker compose -f docker-compose.full.yml --profile tls up -d --build
+```
 
 ### Behind an existing nginx
 

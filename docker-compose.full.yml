@@ -54,6 +54,8 @@ services:
       - caddy_data:/data
     depends_on:
       - web
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
     restart: unless-stopped
 
 volumes:
