@@ -1,0 +1,17 @@
+{
+  "cloud_account_required": "A cloud account is required",
+  "list_failed": "Failed to list items",
+  "item_not_found": "Drive item not found",
+  "item_deleted": "Drive item deleted successfully",
+  "invalid_request": "The request is invalid.",
+  "create_failed": "Could not create the folder. Please try again.",
+  "update_failed": "Could not update the item. Please try again.",
+  "star_failed": "Could not update the star. Please try again.",
+  "delete_failed": "Could not delete the item. Please try again.",
+  "download_failed": "Could not download the item. Please try again.",
+  "preview_failed": "Could not open a preview for this item. Please try again.",
+  "preview_too_large": "This file is too large to preview. Download it to view it.",
+  "preview_unsupported": "This file type cannot be previewed. Download it to view it.",
+  "invalid_cursor": "The pagination cursor is invalid.",
+  "parent_not_found": "Parent folder not found or access denied."
+}
