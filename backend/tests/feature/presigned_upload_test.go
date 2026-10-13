@@ -3,6 +3,7 @@ package feature
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -211,4 +212,43 @@ func (s *PresignedUploadTestSuite) TestInitiatePresignedErrorResolvesEnglishMess
 	s.NotEmpty(message)
 	s.Equal("Could not start the upload. Please try again.", message,
 		"the English locale must resolve upload.initiate_failed to its translation")
+}
+
+// createFolder posts a root-level folder and returns its uuid.
+func (s *PresignedUploadTestSuite) createFolder(name string) string {
+	payload, _ := json.Marshal(map[string]any{
+		"cloud_account_id": s.account.ID,
+		"name":             name,
+	})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		Post("/v1/drive/items/folders", bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusCreated)
+	body, _ := resp.Json()
+	return body["data"].(map[string]any)["uuid"].(string)
+}
+
+// TestPresignedUploadUsesFolderKey proves an upload into a folder is stored at
+// users/<uid>/<folder>/<name> — no uuid prefix, no flat items/ segment — so a
+// sync after a database loss can rebuild the folder.
+func (s *PresignedUploadTestSuite) TestPresignedUploadUsesFolderKey() {
+	folderUUID := s.createFolder("Tài liệu")
+
+	payload, _ := json.Marshal(map[string]any{
+		"cloud_account_id": s.account.ID,
+		"parent_uuid":      folderUUID,
+		"file_name":        "notes.txt",
+		"size":             16,
+		"mime_type":        "text/plain",
+	})
+	resp, err := s.Http(s.T()).WithToken(s.token).Post("/v1/drive/upload/presigned", bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	body, _ := resp.Json()
+	data := body["data"].(map[string]any)
+	item := data["item"].(map[string]any)
+
+	want := fmt.Sprintf("users/%d/Tài liệu/notes.txt", s.user.ID)
+	s.Equal(want, item["storage_path"])
 }

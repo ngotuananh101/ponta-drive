@@ -535,7 +535,11 @@ func (s *CloudDriveService) InitiatePresignedUpload(ctx context.Context, userID 
 	}
 
 	fileExt := strings.TrimPrefix(filepath.Ext(fileName), ".")
-	storageKey := fmt.Sprintf("users/%d/items/%s-%s", userID, uuid.New().String(), fileName)
+	fp, err := s.folderPath(ctx, userID, cloudAccountID, parentID)
+	if err != nil {
+		return nil, nil, err
+	}
+	storageKey := buildStorageKey(userID, fp, fileName)
 
 	item := &models.DriveItem{
 		UUID:           uuid.New().String(),
@@ -640,7 +644,11 @@ func (s *CloudDriveService) InitiateMultipartUpload(ctx context.Context, userID 
 		totalParts = 1
 	}
 
-	storageKey := fmt.Sprintf("users/%d/items/%s-%s", userID, uuid.New().String(), fileName)
+	fp, err := s.folderPath(ctx, userID, cloudAccountID, parentID)
+	if err != nil {
+		return nil, err
+	}
+	storageKey := buildStorageKey(userID, fp, fileName)
 
 	uploadID, err := driver.InitiateMultipart(ctx, storageKey, mimeType)
 	if err != nil {
