@@ -15,5 +15,6 @@
   "invalid_cursor": "Con trỏ phân trang không hợp lệ.",
   "parent_not_found": "Không tìm thấy thư mục cha hoặc bạn không có quyền truy cập.",
   "name_conflict": "Đã có tệp hoặc thư mục mang tên này trong thư mục hiện tại.",
-  "name_invalid": "Tên này không hợp lệ."
+  "name_invalid": "Tên này không hợp lệ.",
+  "move_in_progress": "Mục này đang được di chuyển. Vui lòng đợi hoàn tất."
 }

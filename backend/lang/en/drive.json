@@ -15,5 +15,6 @@
   "invalid_cursor": "The pagination cursor is invalid.",
   "parent_not_found": "Parent folder not found or access denied.",
   "name_conflict": "A file or folder with this name already exists here.",
-  "name_invalid": "This name is not allowed."
+  "name_invalid": "This name is not allowed.",
+  "move_in_progress": "This item is already being moved. Please wait for it to finish."
 }

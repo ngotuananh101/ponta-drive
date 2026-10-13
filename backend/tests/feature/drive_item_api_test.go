@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -806,4 +810,149 @@ func (s *DriveItemAPITestSuite) TestMoveRejectsDuplicateName() {
 	var reloaded models.DriveItem
 	s.Require().NoError(facades.Orm().Query().Where("uuid", second.UUID).First(&reloaded))
 	s.Nil(reloaded.ParentID, "a rejected move must leave the item where it was")
+}
+
+// TestRenameRekeysObject proves a rename copies the object to the new key,
+// updates the row's storage_path, and deletes the old object. The suite's
+// default account points at a fake S3 with no endpoint, so this test creates
+// its own account backed by a mock server.
+func (s *DriveItemAPITestSuite) TestRenameRekeysObject() {
+	var mu sync.Mutex
+	var copied, deleted []string
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			w.Header().Set("Content-Length", "1024")
+			w.Header().Set("Content-Type", "application/pdf")
+			w.Header().Set("ETag", `"etag-old"`)
+			w.WriteHeader(http.StatusOK)
+		case http.MethodPut:
+			mu.Lock()
+			copied = append(copied, r.URL.Path)
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<CopyObjectResult><ETag>"etag-new"</ETag></CopyObjectResult>`))
+		case http.MethodDelete:
+			mu.Lock()
+			deleted = append(deleted, r.URL.Path)
+			mu.Unlock()
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer mock.Close()
+
+	account := models.CloudAccount{UserID: s.user.ID, Name: "Rekey Storage", Provider: models.ProviderMinIO, IsActive: true}
+	_ = account.SetCredentials(&models.S3Credentials{
+		Endpoint: mock.URL, Bucket: "rekey-bucket", Region: "us-east-1",
+		AccessKeyID: "mock-key", SecretAccessKey: "mock-secret", UsePathStyle: true,
+	})
+	s.Require().NoError(facades.Orm().Query().Create(&account))
+
+	oldKey := fmt.Sprintf("users/%d/items/%s-a.pdf", s.user.ID, uuid.New().String())
+	file := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		Name: "a.pdf", Type: models.ItemTypeFile, StoragePath: oldKey, Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&file))
+
+	payload, _ := json.Marshal(map[string]any{"name": "b.pdf"})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		WithHeader("Content-Type", "application/json").
+		Patch(fmt.Sprintf("/v1/drive/items/%s", file.UUID), bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	wantKey := fmt.Sprintf("users/%d/b.pdf", s.user.ID)
+	var reloaded models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("id", file.ID).First(&reloaded))
+	s.Equal("b.pdf", reloaded.Name)
+	s.Equal(models.ItemStatusReady, reloaded.Status, "a settled move must end ready")
+	s.Equal(wantKey, reloaded.StoragePath, "the row must point at the re-keyed object")
+
+	mu.Lock()
+	defer mu.Unlock()
+	s.Contains(copied, "/rekey-bucket/"+wantKey, "the object must be copied to its new key")
+	s.Contains(deleted, "/rekey-bucket/"+oldKey, "the old object must be deleted")
+}
+
+// TestMoveFolderRekeysDescendants proves moving a folder re-keys every file
+// inside it from its own name and its new folder path — not by substituting the
+// old key's prefix.
+func (s *DriveItemAPITestSuite) TestMoveFolderRekeysDescendants() {
+	var mu sync.Mutex
+	var copied, deleteBodies []string
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			w.Header().Set("Content-Length", "1024")
+			w.Header().Set("ETag", `"etag"`)
+			w.WriteHeader(http.StatusOK)
+		case http.MethodPut:
+			mu.Lock()
+			copied = append(copied, r.URL.Path)
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<CopyObjectResult><ETag>"etag-new"</ETag></CopyObjectResult>`))
+		case http.MethodPost:
+			body, _ := io.ReadAll(r.Body)
+			mu.Lock()
+			deleteBodies = append(deleteBodies, string(body))
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<DeleteResult></DeleteResult>`))
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer mock.Close()
+
+	account := models.CloudAccount{UserID: s.user.ID, Name: "Folder Rekey Storage", Provider: models.ProviderMinIO, IsActive: true}
+	_ = account.SetCredentials(&models.S3Credentials{
+		Endpoint: mock.URL, Bucket: "folder-bucket", Region: "us-east-1",
+		AccessKeyID: "mock-key", SecretAccessKey: "mock-secret", UsePathStyle: true,
+	})
+	s.Require().NoError(facades.Orm().Query().Create(&account))
+
+	folderB := models.DriveItem{UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID, Name: "B", Type: models.ItemTypeFolder, Status: models.ItemStatusReady}
+	s.Require().NoError(facades.Orm().Query().Create(&folderB))
+	folderA := models.DriveItem{UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID, Name: "A", Type: models.ItemTypeFolder, Status: models.ItemStatusReady}
+	s.Require().NoError(facades.Orm().Query().Create(&folderA))
+
+	oldKey := fmt.Sprintf("users/%d/items/%s-f.pdf", s.user.ID, uuid.New().String())
+	file := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		ParentID: &folderA.ID, Name: "f.pdf", Type: models.ItemTypeFile, StoragePath: oldKey, Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&file))
+
+	payload, _ := json.Marshal(map[string]any{"parent_uuid": folderB.UUID})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		WithHeader("Content-Type", "application/json").
+		Patch(fmt.Sprintf("/v1/drive/items/%s", folderA.UUID), bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	var reloadedFolder models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("id", folderA.ID).First(&reloadedFolder))
+	s.Require().NotNil(reloadedFolder.ParentID)
+	s.Equal(folderB.ID, *reloadedFolder.ParentID)
+
+	wantKey := fmt.Sprintf("users/%d/B/A/f.pdf", s.user.ID)
+	var reloadedFile models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("id", file.ID).First(&reloadedFile))
+	s.Equal(wantKey, reloadedFile.StoragePath, "a descendant must be re-keyed under the new folder path")
+	s.Equal(models.ItemStatusReady, reloadedFile.Status)
+
+	mu.Lock()
+	defer mu.Unlock()
+	s.Contains(copied, "/folder-bucket/"+wantKey)
+	foundOld := false
+	for _, b := range deleteBodies {
+		if strings.Contains(b, oldKey) {
+			foundOld = true
+		}
+	}
+	s.True(foundOld, "the descendant's old object must be batch-deleted")
 }

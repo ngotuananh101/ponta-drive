@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/goravel/framework/contracts/database/orm"
 	"github.com/goravel/framework/support/carbon"
 
 	"ponta_drive/app/contracts"
@@ -1258,4 +1259,234 @@ func internalUploadRealName(key string) string {
 		return ""
 	}
 	return stripped
+}
+
+// RekeyItem is the body of RekeyDriveItemJob: after a rename/move it copies the
+// object(s) to their new key, updates the database, then deletes the old
+// object(s). It runs outside the request, so a large folder move cannot time
+// out the caller.
+//
+// An item with no object to move (a file with an empty storage_path, a folder
+// with no file descendants) updates its row without any S3 call.
+func (s *CloudDriveService) RekeyItem(ctx context.Context, userID uint, itemUUID string, newName string, newParentID *uint) error {
+	item, err := s.GetItemByUUID(ctx, userID, itemUUID)
+	if err != nil {
+		return err
+	}
+	previousName := item.Name
+
+	driver, _, err := s.GetDriver(ctx, userID, item.CloudAccountID)
+	if err != nil {
+		return s.markRekeyFailed(ctx, userID, item, err)
+	}
+
+	if item.IsFolder() {
+		err = s.rekeyFolder(ctx, userID, driver, item, newName, newParentID)
+	} else {
+		err = s.rekeyFile(ctx, userID, driver, item, newName, newParentID)
+	}
+	if err != nil {
+		return s.markRekeyFailed(ctx, userID, item, err)
+	}
+
+	finalName := item.Name
+	if trimmed := strings.TrimSpace(newName); trimmed != "" {
+		finalName = trimmed
+	}
+	if finalName != previousName {
+		activityService := NewActivityService()
+		activityService.LogSafe(userID, item.CloudAccountID, "renamed",
+			fmt.Sprintf("%s -> %s", previousName, finalName), &item.UUID, "system", "Queue Worker", nil)
+	}
+	return nil
+}
+
+// rekeyFile re-keys a single file: copy to the new key, update the row, delete
+// the old object.
+func (s *CloudDriveService) rekeyFile(ctx context.Context, userID uint, driver contracts.CloudDriver, item *models.DriveItem, newName string, newParentID *uint) error {
+	finalName := item.Name
+	if trimmed := strings.TrimSpace(newName); trimmed != "" {
+		finalName = trimmed
+	}
+
+	destPath, err := s.folderPath(ctx, userID, item.CloudAccountID, newParentID)
+	if err != nil {
+		return err
+	}
+	newKey := buildStorageKey(userID, destPath, finalName)
+
+	// Nothing to copy: no object, or the key does not change. Update the row
+	// (and clear the moving marker) without touching S3.
+	if item.StoragePath == "" || item.StoragePath == newKey {
+		_, err = s.ApplyMove(ctx, userID, item.UUID, newName, newParentID, item.StoragePath)
+		return err
+	}
+
+	oldKey := item.StoragePath
+	if err := driver.CopyObject(ctx, oldKey, newKey); err != nil {
+		return err
+	}
+	if _, err := s.ApplyMove(ctx, userID, item.UUID, newName, newParentID, newKey); err != nil {
+		// The row was not updated, so remove the object we just created to
+		// avoid an orphan at the new key.
+		_ = driver.Delete(ctx, newKey)
+		return err
+	}
+	// The row already points at the new key. A failed delete leaves a stale
+	// object, which is a cleanup issue, not a failed move.
+	if err := driver.Delete(ctx, oldKey); err != nil {
+		facades.Log().Errorf("[drive] rekey: failed to delete old object %q: %v", oldKey, err)
+	}
+	return nil
+}
+
+// rekeyFolder re-keys every file in a moved folder. Each file's new key is
+// derived from its own name and its path inside the moved subtree — not by
+// substituting the old key's prefix, because a descendant may still carry a
+// legacy flat key that shares no prefix with its siblings.
+func (s *CloudDriveService) rekeyFolder(ctx context.Context, userID uint, driver contracts.CloudDriver, item *models.DriveItem, newName string, newParentID *uint) error {
+	allItems, _, _, err := s.CollectDescendantItems(ctx, userID, item.CloudAccountID, item.ID)
+	if err != nil {
+		return err
+	}
+
+	finalName := item.Name
+	if trimmed := strings.TrimSpace(newName); trimmed != "" {
+		finalName = trimmed
+	}
+
+	destPath, err := s.folderPath(ctx, userID, item.CloudAccountID, newParentID)
+	if err != nil {
+		return err
+	}
+	newFolderPath := finalName
+	if destPath != "" {
+		newFolderPath = destPath + "/" + finalName
+	}
+
+	byID := make(map[uint]models.DriveItem, len(allItems))
+	for _, it := range allItems {
+		byID[it.ID] = it
+	}
+
+	type rekeyMove struct {
+		id     uint
+		oldKey string
+		newKey string
+	}
+	var moves []rekeyMove
+	for _, it := range allItems {
+		if !it.IsFile() || it.StoragePath == "" {
+			continue
+		}
+		rel, err := relativeFolderPath(byID, item.ID, it)
+		if err != nil {
+			return err
+		}
+		filePath := newFolderPath
+		if rel != "" {
+			filePath = newFolderPath + "/" + rel
+		}
+		newKey := buildStorageKey(userID, filePath, it.Name)
+		if newKey == it.StoragePath {
+			continue
+		}
+		moves = append(moves, rekeyMove{id: it.ID, oldKey: it.StoragePath, newKey: newKey})
+	}
+
+	var copiedNewKeys []string
+	for _, m := range moves {
+		if err := driver.CopyObject(ctx, m.oldKey, m.newKey); err != nil {
+			_ = driver.DeleteObjects(ctx, copiedNewKeys)
+			return err
+		}
+		copiedNewKeys = append(copiedNewKeys, m.newKey)
+	}
+
+	err = facades.Orm().Transaction(func(tx orm.Query) error {
+		folderUpdate := map[string]any{"name": finalName, "status": models.ItemStatusReady}
+		if newParentID != nil {
+			if *newParentID > 0 {
+				folderUpdate["parent_id"] = *newParentID
+			} else {
+				folderUpdate["parent_id"] = nil
+			}
+		}
+		if _, err := tx.Model(&models.DriveItem{}).Where("id", item.ID).Update(folderUpdate); err != nil {
+			return err
+		}
+		for _, m := range moves {
+			if _, err := tx.Model(&models.DriveItem{}).Where("id", m.id).Update(map[string]any{
+				"storage_path": m.newKey,
+				"status":       models.ItemStatusReady,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		_ = driver.DeleteObjects(ctx, copiedNewKeys)
+		return err
+	}
+
+	if len(moves) > 0 {
+		oldKeys := make([]string, 0, len(moves))
+		for _, m := range moves {
+			oldKeys = append(oldKeys, m.oldKey)
+		}
+		if err := driver.DeleteObjects(ctx, oldKeys); err != nil {
+			facades.Log().Errorf("[drive] rekey folder: failed to delete old objects: %v", err)
+		}
+	}
+	return nil
+}
+
+// markRekeyFailed leaves the item at its old location (nothing was written
+// before the failure) and records the failed status and activity.
+func (s *CloudDriveService) markRekeyFailed(ctx context.Context, userID uint, item *models.DriveItem, cause error) error {
+	_, _ = facades.Orm().Query().Model(&models.DriveItem{}).Where("id", item.ID).
+		Update(map[string]any{"status": models.ItemStatusFailed})
+
+	facades.Log().Errorf("[drive] rekey failed item=%d (%s): %v", item.ID, item.Name, cause)
+
+	activityService := NewActivityService()
+	activityService.LogSafe(userID, item.CloudAccountID, "move_failed", item.Name, &item.UUID, "system", "Queue Worker", nil)
+
+	return cause
+}
+
+// relativeFolderPath returns the "/"-joined folder names strictly below rootID
+// on the path from rootID down to item's parent. It returns "" when item is a
+// direct child of rootID, so a direct child's key needs no extra segment. The
+// walk is guarded against a corrupted cycle.
+func relativeFolderPath(byID map[uint]models.DriveItem, rootID uint, item models.DriveItem) (string, error) {
+	if item.ParentID == nil || *item.ParentID == rootID {
+		return "", nil
+	}
+
+	seen := map[uint]bool{}
+	var reversed []string
+	current := *item.ParentID
+	for current != 0 && current != rootID {
+		if seen[current] {
+			return "", errors.New("cycle in folder tree")
+		}
+		seen[current] = true
+		node, ok := byID[current]
+		if !ok {
+			return "", errors.New("descendant folder not found")
+		}
+		reversed = append(reversed, node.Name)
+		if node.ParentID == nil {
+			break
+		}
+		current = *node.ParentID
+	}
+
+	parts := make([]string, 0, len(reversed))
+	for i := len(reversed) - 1; i >= 0; i-- {
+		parts = append(parts, reversed[i])
+	}
+	return strings.Join(parts, "/"), nil
 }
