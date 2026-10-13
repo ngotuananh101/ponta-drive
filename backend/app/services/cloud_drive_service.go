@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -868,23 +869,60 @@ func (s *CloudDriveService) ScanBucket(ctx context.Context, userID uint, cloudAc
 			}
 
 			// An object the app itself uploaded is stored flat under the reserved
-			// internal prefix (users/<id>/items/<uuid>-<name>) and already has a
-			// DriveItem row carrying the user's real ParentID. That key path is a
-			// storage detail, not a user-visible folder tree, so never derive
-			// folders from it and never re-parent the item: the DB row is
-			// authoritative. Refresh only the metadata that S3 owns.
-			var tracked models.DriveItem
-			_ = facades.Orm().Query().
-				Where("user_id", userID).
-				Where("cloud_account_id", cloudAccountID).
-				Where("storage_path", obj.Key).
-				First(&tracked)
-			if tracked.ID > 0 {
-				tracked.Size = obj.Size
-				tracked.ETag = obj.ETag
-				tracked.Status = models.ItemStatusReady
-				_ = facades.Orm().Query().Save(&tracked)
-				syncedCount++
+			// internal prefix (users/<id>/items/<uuid>-<name>). That key path is a
+			// storage detail, not a user-visible folder tree, so it is never
+			// turned into folders.
+			//
+			// A tracked row (same storage_path) is authoritative: refresh only the
+			// metadata S3 owns and keep its ParentID. When the row is gone — the
+			// database was reset while the bucket still holds the object — recover
+			// the user-facing name from the key and re-attach the file at the scan
+			// root, so the drive shows "file.docx" instead of a phantom
+			// users/<id>/items tree containing a uuid-prefixed name.
+			//
+			// Anything else under the reserved prefix (a directory marker, or a
+			// key that does not carry the uuid- prefix) is skipped rather than
+			// derived into folders: materializing this namespace is exactly the
+			// bug being avoided.
+			if strings.HasPrefix(key, internalUploadPrefix(userID)) {
+				var tracked models.DriveItem
+				_ = facades.Orm().Query().
+					Where("user_id", userID).
+					Where("cloud_account_id", cloudAccountID).
+					Where("storage_path", obj.Key).
+					First(&tracked)
+
+				if tracked.ID > 0 {
+					tracked.Size = obj.Size
+					tracked.ETag = obj.ETag
+					tracked.Status = models.ItemStatusReady
+					_ = facades.Orm().Query().Save(&tracked)
+					syncedCount++
+					continue
+				}
+
+				realName := internalUploadRealName(key)
+				if realName == "" {
+					continue
+				}
+
+				newItem := models.DriveItem{
+					UUID:           uuid.New().String(),
+					UserID:         userID,
+					CloudAccountID: cloudAccountID,
+					ParentID:       parentID,
+					Name:           realName,
+					Type:           models.ItemTypeFile,
+					MimeType:       obj.MimeType,
+					Size:           obj.Size,
+					Extension:      strings.TrimPrefix(filepath.Ext(realName), "."),
+					StoragePath:    obj.Key,
+					ETag:           obj.ETag,
+					Status:         models.ItemStatusReady,
+				}
+				if err := facades.Orm().Query().Create(&newItem); err == nil {
+					syncedCount++
+				}
 				continue
 			}
 
@@ -1137,4 +1175,30 @@ func (s *CloudDriveService) ResolvePreview(ctx context.Context, userID uint, ite
 	}
 
 	return result, nil
+}
+
+// internalUploadPrefix is the reserved key prefix under which the app stores
+// objects it uploaded: users/<userID>/items/. The <uuid>- prefix that follows
+// on each key is an implementation detail, never part of the user-facing name.
+func internalUploadPrefix(userID uint) string {
+	return fmt.Sprintf("users/%d/items/", userID)
+}
+
+// uuidPrefixPattern matches the "<uuid>-" head of an app-uploaded object's
+// final key segment, e.g. "09d3c478-1bfe-449b-a202-e84ef72b16e5-file.docx".
+var uuidPrefixPattern = regexp.MustCompile(
+	`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}-`,
+)
+
+// internalUploadRealName recovers the user-facing file name from an app-uploaded
+// object key. It returns "" when the key is not shaped like an app upload (no
+// uuid prefix, or nothing after it), so callers can fall back to normal
+// derivation instead of losing the object.
+func internalUploadRealName(key string) string {
+	base := key[strings.LastIndex(key, "/")+1:]
+	stripped := uuidPrefixPattern.ReplaceAllString(base, "")
+	if stripped == "" || stripped == base {
+		return ""
+	}
+	return stripped
 }

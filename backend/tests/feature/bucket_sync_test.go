@@ -301,6 +301,93 @@ func (s *BucketSyncTestSuite) TestSyncDoesNotMaterializeInternalUploadPrefix() {
 	s.Equal(int64(1), totalFiles)
 }
 
+// TestSyncRecoversUploadedNameAfterDatabaseReset reproduces the bug where, after
+// the database was reset while the bucket still held an app-uploaded object, a
+// sync materialized the internal prefix `users/<id>/items/` as user-visible
+// folders and named the file with its uuid prefix
+// (`<uuid>-file-sample_1MB.docx`) instead of `file-sample_1MB.docx`.
+//
+// With no DriveItem row left, sync must recover the real name from the key and
+// re-attach the file, and must never create the phantom `users`/`items` folders.
+func (s *BucketSyncTestSuite) TestSyncRecoversUploadedNameAfterDatabaseReset() {
+	realName := "file-sample_1MB.docx"
+	internalKey := fmt.Sprintf("users/%d/items/%s-%s", s.user.ID, uuid.New().String(), realName)
+
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("list-type") == "2" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>mock-bucket</Name>
+  <Prefix></Prefix>
+  <KeyCount>1</KeyCount>
+  <MaxKeys>1000</MaxKeys>
+  <IsTruncated>false</IsTruncated>
+  <Contents>
+    <Key>%s</Key>
+    <LastModified>2026-09-20T10:00:00.000Z</LastModified>
+    <ETag>"mock-etag-sample"</ETag>
+    <Size>1048576</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+</ListBucketResult>`, internalKey)))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+
+	account := models.CloudAccount{
+		UserID:   s.user.ID,
+		Name:     "Reset DB Storage",
+		Provider: models.ProviderMinIO,
+		IsActive: true,
+	}
+	_ = account.SetCredentials(&models.S3Credentials{
+		Endpoint:        mock.URL,
+		Bucket:          "mock-bucket",
+		Region:          "us-east-1",
+		AccessKeyID:     "mock-key",
+		SecretAccessKey: "mock-secret",
+		UsePathStyle:    true,
+	})
+	s.Require().NoError(facades.Orm().Query().Create(&account))
+
+	// No DriveItem row exists — the database was reset. Sync must still recover
+	// the file under its real name.
+	resp, err := s.Http(s.T()).WithToken(s.token).Post(fmt.Sprintf("/v1/cloud-accounts/%d/sync", account.ID), nil)
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	var files []models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("user_id", s.user.ID).
+		Where("cloud_account_id", account.ID).
+		Where("type", models.ItemTypeFile).
+		Find(&files))
+	s.Require().Len(files, 1, "the object must be re-attached, not dropped")
+	s.Equal(realName, files[0].Name, "the uuid prefix must not leak into the file name")
+	s.Equal(internalKey, files[0].StoragePath)
+	s.Equal("docx", files[0].Extension)
+
+	// And no phantom `users`/`items` tree may appear.
+	var phantom []models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("user_id", s.user.ID).
+		Where("cloud_account_id", account.ID).
+		Where("name", "users").
+		Find(&phantom))
+	s.Empty(phantom, "the internal upload prefix must never become a folder")
+
+	var itemsFolder []models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("user_id", s.user.ID).
+		Where("cloud_account_id", account.ID).
+		Where("name", "items").
+		Find(&itemsFolder))
+	s.Empty(itemsFolder, "the internal upload prefix must never become a folder")
+}
+
 // TestCreateAccountAutoSyncs pins the "save a connection and it starts syncing"
 // behaviour. Previously a new account stayed empty until someone found the sync
 // endpoint, so the drive view showed nothing. Store now dispatches the same job
