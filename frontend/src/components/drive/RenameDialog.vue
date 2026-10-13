@@ -60,7 +60,7 @@ async function submit() {
     console.error(e)
     if (e instanceof MoveNotSettledError) {
       // The re-key failed or timed out: the name is unchanged on the server.
-      error.value = t('drive.move_failed')
+      error.value = t('drive.rename_failed')
     } else {
       error.value = e instanceof ApiError ? e.message : t('drive.action_failed')
     }

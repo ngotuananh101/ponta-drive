@@ -246,6 +246,7 @@
     "name_conflict": "A file or folder with this name already exists here.",
     "name_invalid": "Invalid name.",
     "moving": "Moving...",
-    "move_failed": "Move failed. Please try again."
+    "move_failed": "Move failed. Please try again.",
+    "rename_failed": "Rename failed. Please try again."
   }
 }

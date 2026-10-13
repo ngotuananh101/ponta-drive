@@ -952,31 +952,32 @@ func (s *CloudDriveService) ScanBucket(ctx context.Context, userID uint, cloudAc
 				continue
 			}
 
+			// A tracked row (same storage_path) is authoritative for any key shape:
+			// refresh the metadata S3 owns and keep its existing parent_id. Path
+			// derivation and folder materialization only run for untracked keys
+			// (post-reset recovery or newly discovered bucket objects).
+			var tracked models.DriveItem
+			_ = facades.Orm().Query().
+				Where("user_id", userID).
+				Where("cloud_account_id", cloudAccountID).
+				Where("storage_path = ? OR storage_path = ?", obj.Key, key).
+				First(&tracked)
+
+			if tracked.ID > 0 {
+				tracked.Size = obj.Size
+				tracked.ETag = obj.ETag
+				tracked.Status = models.ItemStatusReady
+				_ = facades.Orm().Query().Save(&tracked)
+				syncedCount++
+				continue
+			}
+
 			shape, recoveredName := classifyKey(userID, key)
 
 			if shape == scanShapeLegacy {
-				// A tracked row (same storage_path) is authoritative: refresh the
-				// metadata S3 owns and keep its ParentID. When the row is gone — the
-				// database was reset while the bucket still holds the object —
-				// recover the user-facing name and re-attach the file at the scan
-				// root, so the drive shows "file.docx" instead of a phantom
-				// users/<id>/items tree holding a uuid-prefixed name.
-				var tracked models.DriveItem
-				_ = facades.Orm().Query().
-					Where("user_id", userID).
-					Where("cloud_account_id", cloudAccountID).
-					Where("storage_path", obj.Key).
-					First(&tracked)
-
-				if tracked.ID > 0 {
-					tracked.Size = obj.Size
-					tracked.ETag = obj.ETag
-					tracked.Status = models.ItemStatusReady
-					_ = facades.Orm().Query().Save(&tracked)
-					syncedCount++
-					continue
-				}
-
+				// The row is untracked — the database was reset while the bucket still holds
+				// the legacy object. Recover the user-facing name and attach the file at
+				// the scan root, avoiding phantom users/<id>/items folders.
 				if recoveredName == "" {
 					continue
 				}
@@ -1309,7 +1310,16 @@ func (s *CloudDriveService) rekeyFile(ctx context.Context, userID uint, driver c
 		finalName = trimmed
 	}
 
-	destPath, err := s.folderPath(ctx, userID, item.CloudAccountID, newParentID)
+	destParentID := item.ParentID
+	if newParentID != nil {
+		if *newParentID == 0 {
+			destParentID = nil
+		} else {
+			destParentID = newParentID
+		}
+	}
+
+	destPath, err := s.folderPath(ctx, userID, item.CloudAccountID, destParentID)
 	if err != nil {
 		return err
 	}
@@ -1355,7 +1365,16 @@ func (s *CloudDriveService) rekeyFolder(ctx context.Context, userID uint, driver
 		finalName = trimmed
 	}
 
-	destPath, err := s.folderPath(ctx, userID, item.CloudAccountID, newParentID)
+	destParentID := item.ParentID
+	if newParentID != nil {
+		if *newParentID == 0 {
+			destParentID = nil
+		} else {
+			destParentID = newParentID
+		}
+	}
+
+	destPath, err := s.folderPath(ctx, userID, item.CloudAccountID, destParentID)
 	if err != nil {
 		return err
 	}

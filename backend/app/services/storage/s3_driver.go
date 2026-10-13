@@ -565,11 +565,11 @@ func (d *S3Driver) multipartCopy(ctx context.Context, srcKey, dstKey string, siz
 			CopySourceRange: aws.String(rangeHeader),
 		})
 		if err != nil {
-			_ = d.AbortMultipart(ctx, dstKey, uploadID)
+			d.abortMultipartSafely(ctx, dstKey, uploadID)
 			return err
 		}
 		if output.CopyPartResult == nil || output.CopyPartResult.ETag == nil {
-			_ = d.AbortMultipart(ctx, dstKey, uploadID)
+			d.abortMultipartSafely(ctx, dstKey, uploadID)
 			return errors.New("empty ETag returned from upload part copy")
 		}
 
@@ -580,10 +580,18 @@ func (d *S3Driver) multipartCopy(ctx context.Context, srcKey, dstKey string, siz
 	}
 
 	if err := d.CompleteMultipart(ctx, dstKey, uploadID, parts); err != nil {
-		_ = d.AbortMultipart(ctx, dstKey, uploadID)
+		d.abortMultipartSafely(ctx, dstKey, uploadID)
 		return err
 	}
 	return nil
+}
+
+// abortMultipartSafely attempts to cancel the multipart upload on S3 even if the
+// original context was cancelled (e.g. client disconnected or timeout expired).
+func (d *S3Driver) abortMultipartSafely(ctx context.Context, key, uploadID string) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	_ = d.AbortMultipart(cleanupCtx, key, uploadID)
 }
 
 // encodeCopySource builds the x-amz-copy-source header value. The SDK does not

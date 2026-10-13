@@ -246,6 +246,7 @@
     "name_conflict": "Tên đã tồn tại trong thư mục này.",
     "name_invalid": "Tên không hợp lệ.",
     "moving": "Đang di chuyển...",
-    "move_failed": "Di chuyển thất bại. Vui lòng thử lại."
+    "move_failed": "Di chuyển thất bại. Vui lòng thử lại.",
+    "rename_failed": "Đổi tên thất bại. Vui lòng thử lại."
   }
 }

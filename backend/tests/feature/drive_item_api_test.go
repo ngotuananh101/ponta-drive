@@ -877,6 +877,146 @@ func (s *DriveItemAPITestSuite) TestRenameRekeysObject() {
 	s.Contains(deleted, "/rekey-bucket/"+oldKey, "the old object must be deleted")
 }
 
+// TestRenameInSubfolderPreservesFolderPath reproduces the bug where renaming an
+// item in a subfolder with newParentID=nil caused folderPath to return "" and
+// dropped the parent folder from the key.
+func (s *DriveItemAPITestSuite) TestRenameInSubfolderPreservesFolderPath() {
+	var mu sync.Mutex
+	var copied, deleted []string
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			w.Header().Set("Content-Length", "1024")
+			w.Header().Set("Content-Type", "application/pdf")
+			w.Header().Set("ETag", `"etag-old"`)
+			w.WriteHeader(http.StatusOK)
+		case http.MethodPut:
+			mu.Lock()
+			copied = append(copied, r.URL.Path)
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<CopyObjectResult><ETag>"etag-new"</ETag></CopyObjectResult>`))
+		case http.MethodDelete:
+			mu.Lock()
+			deleted = append(deleted, r.URL.Path)
+			mu.Unlock()
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer mock.Close()
+
+	account := models.CloudAccount{UserID: s.user.ID, Name: "Subfolder Rekey Storage", Provider: models.ProviderMinIO, IsActive: true}
+	_ = account.SetCredentials(&models.S3Credentials{
+		Endpoint: mock.URL, Bucket: "sub-rekey-bucket", Region: "us-east-1",
+		AccessKeyID: "mock-key", SecretAccessKey: "mock-secret", UsePathStyle: true,
+	})
+	s.Require().NoError(facades.Orm().Query().Create(&account))
+
+	folder := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		Name: "Docs", Type: models.ItemTypeFolder, Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&folder))
+
+	oldKey := fmt.Sprintf("users/%d/Docs/report.pdf", s.user.ID)
+	file := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		ParentID: &folder.ID, Name: "report.pdf", Type: models.ItemTypeFile,
+		StoragePath: oldKey, Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&file))
+
+	payload, _ := json.Marshal(map[string]any{"name": "report-v2.pdf"})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		WithHeader("Content-Type", "application/json").
+		Patch(fmt.Sprintf("/v1/drive/items/%s", file.UUID), bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	wantKey := fmt.Sprintf("users/%d/Docs/report-v2.pdf", s.user.ID)
+	var reloaded models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("id", file.ID).First(&reloaded))
+	s.Equal("report-v2.pdf", reloaded.Name)
+	s.Equal(wantKey, reloaded.StoragePath, "renaming inside Docs must keep Docs/ in storage_path")
+
+	mu.Lock()
+	defer mu.Unlock()
+	s.Contains(copied, "/sub-rekey-bucket/"+wantKey, "the object must be copied with Docs/ intact")
+	s.Contains(deleted, "/sub-rekey-bucket/"+oldKey, "the old object must be deleted")
+}
+
+// TestRenameSubfolderPreservesParentFolderPath proves that renaming a subfolder
+// preserves its parent folder in the S3 keys of all its descendants.
+func (s *DriveItemAPITestSuite) TestRenameSubfolderPreservesParentFolderPath() {
+	var mu sync.Mutex
+	var copied []string
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			w.Header().Set("Content-Length", "1024")
+			w.Header().Set("ETag", `"etag"`)
+			w.WriteHeader(http.StatusOK)
+		case http.MethodPut:
+			mu.Lock()
+			copied = append(copied, r.URL.Path)
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<CopyObjectResult><ETag>"etag-new"</ETag></CopyObjectResult>`))
+		case http.MethodPost:
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<DeleteResult></DeleteResult>`))
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer mock.Close()
+
+	account := models.CloudAccount{UserID: s.user.ID, Name: "Subfolder Rename Storage", Provider: models.ProviderMinIO, IsActive: true}
+	_ = account.SetCredentials(&models.S3Credentials{
+		Endpoint: mock.URL, Bucket: "subfolder-rename-bucket", Region: "us-east-1",
+		AccessKeyID: "mock-key", SecretAccessKey: "mock-secret", UsePathStyle: true,
+	})
+	s.Require().NoError(facades.Orm().Query().Create(&account))
+
+	parent := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		Name: "Parent", Type: models.ItemTypeFolder, Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&parent))
+
+	child := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		ParentID: &parent.ID, Name: "Child", Type: models.ItemTypeFolder, Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&child))
+
+	oldKey := fmt.Sprintf("users/%d/Parent/Child/nested.txt", s.user.ID)
+	nestedFile := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		ParentID: &child.ID, Name: "nested.txt", Type: models.ItemTypeFile,
+		StoragePath: oldKey, Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&nestedFile))
+
+	payload, _ := json.Marshal(map[string]any{"name": "Child2"})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		WithHeader("Content-Type", "application/json").
+		Patch(fmt.Sprintf("/v1/drive/items/%s", child.UUID), bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	wantKey := fmt.Sprintf("users/%d/Parent/Child2/nested.txt", s.user.ID)
+	var reloadedFile models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("id", nestedFile.ID).First(&reloadedFile))
+	s.Equal(wantKey, reloadedFile.StoragePath, "renaming Child to Child2 must keep Parent/ in descendant storage_path")
+
+	mu.Lock()
+	defer mu.Unlock()
+	s.Contains(copied, "/subfolder-rename-bucket/"+wantKey, "descendant must be copied to Parent/Child2/nested.txt")
+}
+
 // TestMoveFolderRekeysDescendants proves moving a folder re-keys every file
 // inside it from its own name and its new folder path — not by substituting the
 // old key's prefix.

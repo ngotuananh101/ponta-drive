@@ -69,6 +69,7 @@ describe('drive locale namespace', () => {
       'name_invalid',
       'moving',
       'move_failed',
+      'rename_failed',
     ]
 
     for (const k of required) {

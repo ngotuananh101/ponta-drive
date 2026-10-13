@@ -573,3 +573,73 @@ func (s *BucketSyncTestSuite) TestSyncMaterializesFolderNamedItemsAsNewScheme() 
 	s.Equal(key, file.StoragePath)
 }
 
+// TestSyncPreservesTrackedNewSchemeFilePlacement proves that when an object is
+// already tracked by storage_path, sync refreshes only S3-owned metadata (size,
+// etag, status) and keeps the row's existing placement without re-materializing
+// folders under the scan's parent_id.
+func (s *BucketSyncTestSuite) TestSyncPreservesTrackedNewSchemeFilePlacement() {
+	key := fmt.Sprintf("users/%d/custom/report.pdf", s.user.ID)
+
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("list-type") == "2" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>mock-bucket</Name><Prefix></Prefix><KeyCount>1</KeyCount>
+  <MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>
+  <Contents>
+    <Key>%s</Key>
+    <LastModified>2026-10-14T10:00:00.000Z</LastModified>
+    <ETag>"updated-etag"</ETag>
+    <Size>9999</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+</ListBucketResult>`, key)))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+
+	account := models.CloudAccount{UserID: s.user.ID, Name: "Tracked Placement Storage", Provider: models.ProviderMinIO, IsActive: true}
+	_ = account.SetCredentials(&models.S3Credentials{
+		Endpoint: mock.URL, Bucket: "mock-bucket", Region: "us-east-1",
+		AccessKeyID: "mock-key", SecretAccessKey: "mock-secret", UsePathStyle: true,
+	})
+	s.Require().NoError(facades.Orm().Query().Create(&account))
+
+	// An existing folder tree at root: "RootFolder"
+	rootFolder := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		Name: "RootFolder", Type: models.ItemTypeFolder, Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&rootFolder))
+
+	// Tracked file placed inside RootFolder (not in "custom")
+	trackedFile := models.DriveItem{
+		UUID: uuid.New().String(), UserID: s.user.ID, CloudAccountID: account.ID,
+		ParentID: &rootFolder.ID, Name: "report.pdf", Type: models.ItemTypeFile,
+		StoragePath: key, Size: 100, ETag: "old-etag", Status: models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&trackedFile))
+
+	// Trigger sync
+	resp, err := s.Http(s.T()).WithToken(s.token).Post(fmt.Sprintf("/v1/cloud-accounts/%d/sync", account.ID), nil)
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	// Verify tracked file kept its parent placement in RootFolder, and updated Size and ETag
+	var reloaded models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("id", trackedFile.ID).First(&reloaded))
+	s.Require().NotNil(reloaded.ParentID)
+	s.Equal(rootFolder.ID, *reloaded.ParentID, "sync must preserve parent_id of already tracked item")
+	s.Equal(int64(9999), reloaded.Size, "sync must update size")
+	s.Equal("updated-etag", reloaded.ETag, "sync must update etag")
+
+	// No separate "custom" folder should have been materialized
+	var customFolder []models.DriveItem
+	_ = facades.Orm().Query().Where("user_id", s.user.ID).Where("cloud_account_id", account.ID).
+		Where("name", "custom").Find(&customFolder)
+	s.Empty(customFolder, "sync must not materialize folders for already tracked items")
+}
+
