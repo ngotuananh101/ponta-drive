@@ -15,6 +15,7 @@ const (
 	ItemStatusReady     = "ready"
 	ItemStatusUploading = "uploading"
 	ItemStatusSyncing   = "syncing"
+	ItemStatusMoving    = "moving"
 	ItemStatusFailed    = "failed"
 )
 

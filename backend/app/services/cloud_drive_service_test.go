@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
@@ -142,4 +143,59 @@ func (s *CloudDriveServiceTestSuite) TestCollectDescendantsEmptyRoot() {
 	assert.Len(s.T(), items, 1)
 	assert.Empty(s.T(), keys)
 	assert.Equal(s.T(), int64(0), totalSize)
+}
+
+// EnsureUniqueName scopes the check to the same user, account, and parent, and
+// excludes the item itself so a rename to the current name is not a conflict.
+func (s *CloudDriveServiceTestSuite) TestEnsureUniqueName() {
+	service := services.NewCloudDriveService()
+	ctx := context.Background()
+
+	folder := models.DriveItem{
+		UUID:           uuid.New().String(),
+		UserID:         s.user.ID,
+		CloudAccountID: s.account.ID,
+		Name:           "Docs",
+		Type:           models.ItemTypeFolder,
+		Status:         models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&folder))
+
+	file := models.DriveItem{
+		UUID:           uuid.New().String(),
+		UserID:         s.user.ID,
+		CloudAccountID: s.account.ID,
+		ParentID:       &folder.ID,
+		Name:           "a.txt",
+		Type:           models.ItemTypeFile,
+		Status:         models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&file))
+
+	// Same parent, same name -> conflict.
+	s.ErrorIs(service.EnsureUniqueName(ctx, s.user.ID, s.account.ID, &folder.ID, "a.txt", 0), services.ErrNameConflict)
+
+	// A folder name collides with a file name: both live on the same key.
+	s.ErrorIs(service.EnsureUniqueName(ctx, s.user.ID, s.account.ID, &folder.ID, "a.txt", 0), services.ErrNameConflict)
+
+	// Excluding the item itself is not a conflict (rename to the current name).
+	s.NoError(service.EnsureUniqueName(ctx, s.user.ID, s.account.ID, &folder.ID, "a.txt", file.ID))
+
+	// A different name in the same parent is free.
+	s.NoError(service.EnsureUniqueName(ctx, s.user.ID, s.account.ID, &folder.ID, "b.txt", 0))
+
+	// A different parent is a different scope.
+	s.NoError(service.EnsureUniqueName(ctx, s.user.ID, s.account.ID, nil, "a.txt", 0))
+
+	// Same name at the root is free.
+	rootFile := models.DriveItem{
+		UUID:           uuid.New().String(),
+		UserID:         s.user.ID,
+		CloudAccountID: s.account.ID,
+		Name:           "root.txt",
+		Type:           models.ItemTypeFile,
+		Status:         models.ItemStatusReady,
+	}
+	s.Require().NoError(facades.Orm().Query().Create(&rootFile))
+	s.ErrorIs(service.EnsureUniqueName(ctx, s.user.ID, s.account.ID, nil, "root.txt", 0), services.ErrNameConflict)
 }
