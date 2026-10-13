@@ -7,6 +7,7 @@ import {
   deleteDriveItem,
   toggleStarDriveItem,
   getDriveItemDownloadUrl,
+  getDriveItem,
 } from '../driveItems'
 
 describe('driveItems API mutations', () => {
@@ -85,5 +86,12 @@ describe('driveItems API mutations', () => {
     await getDriveItemDownloadUrl('item-uuid')
 
     expect(spy).toHaveBeenCalledWith('/v1/drive/items/item-uuid/download?mode=json')
+  })
+
+  it('getDriveItem GETs the item endpoint', async () => {
+    const spy = vi.spyOn(client, 'fetchApi').mockResolvedValue({ status: 'ok' })
+    await getDriveItem('item-uuid')
+
+    expect(spy).toHaveBeenCalledWith('/v1/drive/items/item-uuid')
   })
 })

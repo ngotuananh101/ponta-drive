@@ -85,6 +85,15 @@ export async function getDriveItemBreadcrumb(
   )
 }
 
+/**
+ * Fetches one item. Used to poll an item after a rename/move: the write
+ * returns immediately with `status = moving` (or, on the sync queue driver,
+ * the already-settled item) and the settled status is what decides success.
+ */
+export async function getDriveItem(uuid: string): Promise<ApiResponse<DriveItem>> {
+  return fetchApi<ApiResponse<DriveItem>>(`/v1/drive/items/${encodeURIComponent(uuid)}`)
+}
+
 export interface CreateFolderPayload {
   cloudAccountId: number
   parentUuid?: string | null

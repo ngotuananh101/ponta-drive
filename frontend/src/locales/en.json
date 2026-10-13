@@ -137,6 +137,7 @@
     "act_sync_started": "Started syncing",
     "act_renamed": "Renamed",
     "act_deleted": "Deleted",
+    "act_move_failed": "Move failed",
     "act_permanently_deleted": "Permanently deleted",
     "time_today_at": "Today, {time}",
     "time_just_now": "Just now",
@@ -241,6 +242,10 @@
     "preview_too_large": "This file is too large to preview. Download it to view it.",
     "preview_download": "Download",
     "preview_close": "Close preview",
-    "preview_open_tab": "Open in new tab"
+    "preview_open_tab": "Open in new tab",
+    "name_conflict": "A file or folder with this name already exists here.",
+    "name_invalid": "Invalid name.",
+    "moving": "Moving...",
+    "move_failed": "Move failed. Please try again."
   }
 }

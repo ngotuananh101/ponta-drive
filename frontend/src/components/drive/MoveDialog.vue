@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { listDriveItems, type DriveItem } from '@/api/driveItems'
-import { useDriveItemsStore } from '@/stores/driveItems'
+import { useDriveItemsStore, MoveNotSettledError } from '@/stores/driveItems'
 import { ApiError } from '@/api/client'
 
 const open = defineModel<boolean>('open', { required: true })
@@ -162,7 +162,12 @@ async function submit() {
     emit('moved', updated)
   } catch (e) {
     console.error(e)
-    error.value = e instanceof ApiError ? e.message : t('drive.action_failed')
+    if (e instanceof MoveNotSettledError) {
+      // The move failed or timed out: the item is still in its old folder.
+      error.value = t('drive.move_failed')
+    } else {
+      error.value = e instanceof ApiError ? e.message : t('drive.action_failed')
+    }
   } finally {
     moving.value = false
   }
@@ -264,7 +269,7 @@ async function submit() {
         </Button>
         <Button type="button" :disabled="moving || !props.item" @click="submit">
           <Loader2 v-if="moving" class="h-4 w-4 animate-spin" />
-          {{ t('drive.move_here') }}
+          {{ moving ? t('drive.moving') : t('drive.move_here') }}
         </Button>
       </DialogFooter>
     </DialogContent>
