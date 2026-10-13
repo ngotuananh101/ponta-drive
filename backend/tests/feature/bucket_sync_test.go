@@ -459,3 +459,117 @@ func (s *BucketSyncTestSuite) TestUploadRejectsDuplicateName() {
 	message, _ := secondBody["message"].(string)
 	s.NotContains(message, "name_conflict", "the translation key must resolve")
 }
+
+// TestSyncRebuildsFolderTreeFromNewSchemeKeys proves the feature's whole point:
+// with no DriveItem rows left, a sync reconstructs the folder tree AND places
+// each file in the folder its key encodes.
+func (s *BucketSyncTestSuite) TestSyncRebuildsFolderTreeFromNewSchemeKeys() {
+	key := fmt.Sprintf("users/%d/Docs/2026/report.pdf", s.user.ID)
+
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("list-type") == "2" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>mock-bucket</Name><Prefix></Prefix><KeyCount>1</KeyCount>
+  <MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>
+  <Contents>
+    <Key>%s</Key>
+    <LastModified>2026-10-13T10:00:00.000Z</LastModified>
+    <ETag>"mock-etag-report"</ETag>
+    <Size>2048</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+</ListBucketResult>`, key)))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+
+	account := models.CloudAccount{UserID: s.user.ID, Name: "New Scheme Storage", Provider: models.ProviderMinIO, IsActive: true}
+	_ = account.SetCredentials(&models.S3Credentials{
+		Endpoint: mock.URL, Bucket: "mock-bucket", Region: "us-east-1",
+		AccessKeyID: "mock-key", SecretAccessKey: "mock-secret", UsePathStyle: true,
+	})
+	s.Require().NoError(facades.Orm().Query().Create(&account))
+
+	resp, err := s.Http(s.T()).WithToken(s.token).Post(fmt.Sprintf("/v1/cloud-accounts/%d/sync", account.ID), nil)
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	// Docs (root) -> 2026 -> report.pdf
+	var docs models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("user_id", s.user.ID).Where("cloud_account_id", account.ID).
+		Where("name", "Docs").Where("type", models.ItemTypeFolder).First(&docs))
+	s.Nil(docs.ParentID)
+
+	var y2026 models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("name", "2026").Where("parent_id", docs.ID).First(&y2026))
+
+	var report models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("name", "report.pdf").Where("parent_id", y2026.ID).First(&report))
+	s.Equal(models.ItemTypeFile, report.Type)
+	s.Equal(key, report.StoragePath)
+
+	// No phantom "users" folder at the root.
+	var phantom []models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("user_id", s.user.ID).Where("cloud_account_id", account.ID).
+		Where("name", "users").Find(&phantom))
+	s.Empty(phantom)
+}
+
+// TestSyncMaterializesFolderNamedItemsAsNewScheme proves the uuid-pattern
+// discriminator: a new-scheme file inside a folder literally named "items" is a
+// real folder with a plain file name, not a legacy upload.
+func (s *BucketSyncTestSuite) TestSyncMaterializesFolderNamedItemsAsNewScheme() {
+	key := fmt.Sprintf("users/%d/items/a.txt", s.user.ID)
+
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("list-type") == "2" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>mock-bucket</Name><Prefix></Prefix><KeyCount>1</KeyCount>
+  <MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>
+  <Contents>
+    <Key>%s</Key>
+    <LastModified>2026-10-13T10:00:00.000Z</LastModified>
+    <ETag>"mock-etag-a"</ETag>
+    <Size>10</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+</ListBucketResult>`, key)))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+
+	account := models.CloudAccount{UserID: s.user.ID, Name: "Items Folder Storage", Provider: models.ProviderMinIO, IsActive: true}
+	_ = account.SetCredentials(&models.S3Credentials{
+		Endpoint: mock.URL, Bucket: "mock-bucket", Region: "us-east-1",
+		AccessKeyID: "mock-key", SecretAccessKey: "mock-secret", UsePathStyle: true,
+	})
+	s.Require().NoError(facades.Orm().Query().Create(&account))
+
+	resp, err := s.Http(s.T()).WithToken(s.token).Post(fmt.Sprintf("/v1/cloud-accounts/%d/sync", account.ID), nil)
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	// A real folder named "items" exists, holding a file named "a.txt" (no uuid).
+	var itemsFolder models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("user_id", s.user.ID).Where("cloud_account_id", account.ID).
+		Where("name", "items").Where("type", models.ItemTypeFolder).First(&itemsFolder))
+
+	var file models.DriveItem
+	s.Require().NoError(facades.Orm().Query().
+		Where("name", "a.txt").Where("parent_id", itemsFolder.ID).First(&file))
+	s.Equal(key, file.StoragePath)
+}
+

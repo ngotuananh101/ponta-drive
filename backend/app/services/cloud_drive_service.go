@@ -898,23 +898,15 @@ func (s *CloudDriveService) ScanBucket(ctx context.Context, userID uint, cloudAc
 				continue
 			}
 
-			// An object the app itself uploaded is stored flat under the reserved
-			// internal prefix (users/<id>/items/<uuid>-<name>). That key path is a
-			// storage detail, not a user-visible folder tree, so it is never
-			// turned into folders.
-			//
-			// A tracked row (same storage_path) is authoritative: refresh only the
-			// metadata S3 owns and keep its ParentID. When the row is gone — the
-			// database was reset while the bucket still holds the object — recover
-			// the user-facing name from the key and re-attach the file at the scan
-			// root, so the drive shows "file.docx" instead of a phantom
-			// users/<id>/items tree containing a uuid-prefixed name.
-			//
-			// Anything else under the reserved prefix (a directory marker, or a
-			// key that does not carry the uuid- prefix) is skipped rather than
-			// derived into folders: materializing this namespace is exactly the
-			// bug being avoided.
-			if strings.HasPrefix(key, internalUploadPrefix(userID)) {
+			shape, recoveredName := classifyKey(userID, key)
+
+			if shape == scanShapeLegacy {
+				// A tracked row (same storage_path) is authoritative: refresh the
+				// metadata S3 owns and keep its ParentID. When the row is gone — the
+				// database was reset while the bucket still holds the object —
+				// recover the user-facing name and re-attach the file at the scan
+				// root, so the drive shows "file.docx" instead of a phantom
+				// users/<id>/items tree holding a uuid-prefixed name.
 				var tracked models.DriveItem
 				_ = facades.Orm().Query().
 					Where("user_id", userID).
@@ -931,153 +923,46 @@ func (s *CloudDriveService) ScanBucket(ctx context.Context, userID uint, cloudAc
 					continue
 				}
 
-				realName := internalUploadRealName(key)
-				if realName == "" {
+				if recoveredName == "" {
 					continue
 				}
 
-				newItem := models.DriveItem{
-					UUID:           uuid.New().String(),
-					UserID:         userID,
-					CloudAccountID: cloudAccountID,
-					ParentID:       parentID,
-					Name:           realName,
-					Type:           models.ItemTypeFile,
-					MimeType:       obj.MimeType,
-					Size:           obj.Size,
-					Extension:      strings.TrimPrefix(filepath.Ext(realName), "."),
-					StoragePath:    obj.Key,
-					ETag:           obj.ETag,
-					Status:         models.ItemStatusReady,
-				}
-				if err := facades.Orm().Query().Create(&newItem); err == nil {
+				if err := s.upsertScannedFile(ctx, userID, cloudAccountID, parentID, obj, recoveredName); err == nil {
 					syncedCount++
 				}
 				continue
 			}
 
-			// Check if this is an S3 directory marker (ends with /)
-			isDirMarker := strings.HasSuffix(key, "/")
-			trimmedKey := strings.Trim(key, "/")
+			// New-scheme and external keys both derive folders from segments. A
+			// new-scheme key drops the users/<uid>/ prefix first; an external key
+			// keeps its whole path.
+			derivedKey := key
+			if shape == scanShapeNew {
+				derivedKey = strings.TrimPrefix(key, fmt.Sprintf("users/%d/", userID))
+			}
+
+			isDirMarker := strings.HasSuffix(derivedKey, "/")
+			trimmedKey := strings.Trim(derivedKey, "/")
 			segments := strings.Split(trimmedKey, "/")
-			if len(segments) == 0 {
+			if len(segments) == 0 || trimmedKey == "" {
 				continue
 			}
 
-			currentParentID := parentID
-
 			if isDirMarker {
-				// Ensure all segments are created as folders
-				for _, folderName := range segments {
-					if folderName == "" {
-						continue
-					}
-					var folder models.DriveItem
-					q := facades.Orm().Query().
-						Where("user_id", userID).
-						Where("cloud_account_id", cloudAccountID).
-						Where("name", folderName).
-						Where("type", models.ItemTypeFolder)
-					if currentParentID == nil {
-						q = q.Where("parent_id IS NULL")
-					} else {
-						q = q.Where("parent_id = ?", *currentParentID)
-					}
-					_ = q.First(&folder)
-
-					if folder.ID == 0 {
-						folder = models.DriveItem{
-							UUID:           uuid.New().String(),
-							UserID:         userID,
-							CloudAccountID: cloudAccountID,
-							ParentID:       currentParentID,
-							Name:           folderName,
-							Type:           models.ItemTypeFolder,
-							Status:         models.ItemStatusReady,
-						}
-						_ = facades.Orm().Query().Create(&folder)
-					}
-					fID := folder.ID
-					currentParentID = &fID
+				// A directory marker has no trailing file: every segment is a folder.
+				if _, err := s.materializeFolders(ctx, userID, cloudAccountID, parentID, segments); err == nil {
+					syncedCount++
 				}
-			} else {
-				// Ensure parent directory folders exist
-				for i := 0; i < len(segments)-1; i++ {
-					folderName := segments[i]
-					if folderName == "" {
-						continue
-					}
-					var folder models.DriveItem
-					q := facades.Orm().Query().
-						Where("user_id", userID).
-						Where("cloud_account_id", cloudAccountID).
-						Where("name", folderName).
-						Where("type", models.ItemTypeFolder)
-					if currentParentID == nil {
-						q = q.Where("parent_id IS NULL")
-					} else {
-						q = q.Where("parent_id = ?", *currentParentID)
-					}
-					_ = q.First(&folder)
+				continue
+			}
 
-					if folder.ID == 0 {
-						folder = models.DriveItem{
-							UUID:           uuid.New().String(),
-							UserID:         userID,
-							CloudAccountID: cloudAccountID,
-							ParentID:       currentParentID,
-							Name:           folderName,
-							Type:           models.ItemTypeFolder,
-							Status:         models.ItemStatusReady,
-						}
-						_ = facades.Orm().Query().Create(&folder)
-					}
-					fID := folder.ID
-					currentParentID = &fID
-				}
-
-				// Upsert the file
-				fileName := segments[len(segments)-1]
-				fileExt := strings.TrimPrefix(filepath.Ext(fileName), ".")
-
-				// Not tracked by storage_path (checked above), so match an
-				// existing row by name within the derived folder, else create.
-				var nameMatch models.DriveItem
-				q := facades.Orm().Query().
-					Where("user_id", userID).
-					Where("cloud_account_id", cloudAccountID).
-					Where("name", fileName).
-					Where("type", models.ItemTypeFile)
-				if currentParentID == nil {
-					q = q.Where("parent_id IS NULL")
-				} else {
-					q = q.Where("parent_id = ?", *currentParentID)
-				}
-				_ = q.First(&nameMatch)
-
-				if nameMatch.ID > 0 {
-					nameMatch.StoragePath = obj.Key
-					nameMatch.Size = obj.Size
-					nameMatch.ETag = obj.ETag
-					nameMatch.Status = models.ItemStatusReady
-					_ = facades.Orm().Query().Save(&nameMatch)
-				} else {
-					newItem := models.DriveItem{
-						UUID:           uuid.New().String(),
-						UserID:         userID,
-						CloudAccountID: cloudAccountID,
-						ParentID:       currentParentID,
-						Name:           fileName,
-						Type:           models.ItemTypeFile,
-						MimeType:       obj.MimeType,
-						Size:           obj.Size,
-						Extension:      fileExt,
-						StoragePath:    obj.Key,
-						ETag:           obj.ETag,
-						Status:         models.ItemStatusReady,
-					}
-					_ = facades.Orm().Query().Create(&newItem)
-				}
+			// The trailing segment is the file; the rest are its folders.
+			fileParent, err := s.materializeFolders(ctx, userID, cloudAccountID, parentID, segments[:len(segments)-1])
+			if err != nil {
+				continue
+			}
+			fileName := segments[len(segments)-1]
+			if err := s.upsertScannedFile(ctx, userID, cloudAccountID, fileParent, obj, fileName); err == nil {
 				syncedCount++
 			}
 		}
@@ -1102,6 +987,95 @@ func (s *CloudDriveService) ScanBucket(ctx context.Context, userID uint, cloudAc
 	}
 
 	return syncedCount, nil
+}
+
+// materializeFolders ensures every segment exists as a folder under parentID,
+// creating the missing ones, and returns the deepest folder's id (nil for an
+// empty segment list). It is the folder-derivation loop the old ScanBucket
+// else-branch ran inline, shared by the new-scheme path, the external path, and
+// the directory-marker case.
+func (s *CloudDriveService) materializeFolders(ctx context.Context, userID, cloudAccountID uint, parentID *uint, segments []string) (*uint, error) {
+	currentParentID := parentID
+	for _, folderName := range segments {
+		if folderName == "" {
+			continue
+		}
+		var folder models.DriveItem
+		q := facades.Orm().Query().
+			Where("user_id", userID).
+			Where("cloud_account_id", cloudAccountID).
+			Where("name", folderName).
+			Where("type", models.ItemTypeFolder)
+		if currentParentID == nil {
+			q = q.Where("parent_id IS NULL")
+		} else {
+			q = q.Where("parent_id = ?", *currentParentID)
+		}
+		_ = q.First(&folder)
+
+		if folder.ID == 0 {
+			folder = models.DriveItem{
+				UUID:           uuid.New().String(),
+				UserID:         userID,
+				CloudAccountID: cloudAccountID,
+				ParentID:       currentParentID,
+				Name:           folderName,
+				Type:           models.ItemTypeFolder,
+				Status:         models.ItemStatusReady,
+			}
+			if err := facades.Orm().Query().Create(&folder); err != nil {
+				return nil, err
+			}
+		}
+		fID := folder.ID
+		currentParentID = &fID
+	}
+	return currentParentID, nil
+}
+
+// upsertScannedFile records a scanned object as a file row under parentID,
+// matching an existing row by name so a re-scan does not duplicate it. The key
+// was not tracked by storage_path (the caller checked), so a name match within
+// the derived folder is the identity.
+func (s *CloudDriveService) upsertScannedFile(ctx context.Context, userID, cloudAccountID uint, parentID *uint, obj contracts.ObjectMetadata, name string) error {
+	fileExt := strings.TrimPrefix(filepath.Ext(name), ".")
+
+	var nameMatch models.DriveItem
+	q := facades.Orm().Query().
+		Where("user_id", userID).
+		Where("cloud_account_id", cloudAccountID).
+		Where("name", name).
+		Where("type", models.ItemTypeFile)
+	if parentID == nil {
+		q = q.Where("parent_id IS NULL")
+	} else {
+		q = q.Where("parent_id = ?", *parentID)
+	}
+	_ = q.First(&nameMatch)
+
+	if nameMatch.ID > 0 {
+		nameMatch.StoragePath = obj.Key
+		nameMatch.Size = obj.Size
+		nameMatch.ETag = obj.ETag
+		nameMatch.Status = models.ItemStatusReady
+		return facades.Orm().Query().Save(&nameMatch)
+	}
+
+	newItem := models.DriveItem{
+		UUID:           uuid.New().String(),
+		UserID:         userID,
+		CloudAccountID: cloudAccountID,
+		ParentID:       parentID,
+		Name:           name,
+		Type:           models.ItemTypeFile,
+		MimeType:       obj.MimeType,
+		Size:           obj.Size,
+		Extension:      fileExt,
+		StoragePath:    obj.Key,
+		ETag:           obj.ETag,
+		Status:         models.ItemStatusReady,
+	}
+	return facades.Orm().Query().Create(&newItem)
 }
 
 // PreviewResult is the resolved way to preview one file.
