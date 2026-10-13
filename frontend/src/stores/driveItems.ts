@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import {
   listDriveItems,
   getDriveItemBreadcrumb,
+  getDriveItem,
   createDriveFolder,
   renameDriveItem,
   moveDriveItem,
@@ -24,6 +25,30 @@ export type DriveListQuery = Omit<DriveListParams, 'cursor' | 'limit'>
  */
 function isAbortError(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { name?: unknown }).name === 'AbortError'
+}
+
+/**
+ * How long to wait between polls while a re-key runs, and how many times to
+ * poll before giving up. A large folder move can take a while, so the loop is
+ * bounded rather than waiting forever.
+ */
+export const MOVE_POLL_INTERVAL_MS = 2000
+export const MOVE_POLL_MAX_ATTEMPTS = 30
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Thrown when a rename/move did not settle at `ready` — the backend re-key
+ * failed, or the poll hit its attempt bound. Carries no message: the dialogs
+ * map it to a localized string.
+ */
+export class MoveNotSettledError extends Error {
+  constructor() {
+    super('move did not settle')
+    this.name = 'MoveNotSettledError'
+  }
 }
 
 /**
@@ -129,19 +154,54 @@ export const useDriveItemsStore = defineStore('driveItems', () => {
     return created
   }
 
+  /**
+   * Waits for a rename/move to settle. The PATCH response is the first check:
+   * with the "sync" queue driver the re-key already ran, so it is already
+   * settled and no request is wasted. While it still reports `moving`, the
+   * single item is polled until it leaves that state or the bound is hit.
+   * Returns the settled item, or null if it never settled.
+   */
+  async function awaitMoveSettled(uuid: string, patched: DriveItem): Promise<DriveItem | null> {
+    let current = patched
+    for (let attempt = 0; attempt < MOVE_POLL_MAX_ATTEMPTS; attempt += 1) {
+      if (current.status !== 'moving') {
+        return current
+      }
+      await sleep(MOVE_POLL_INTERVAL_MS)
+      try {
+        const res = await getDriveItem(uuid)
+        current = res.data as DriveItem
+      } catch {
+        // A transient poll failure should not strand the UI; keep polling
+        // until the item settles or the bound stops the loop.
+      }
+    }
+    return current.status !== 'moving' ? current : null
+  }
+
   async function rename(uuid: string, newName: string): Promise<DriveItem> {
     const res = await renameDriveItem(uuid, newName)
-    const updated = res.data as DriveItem
-    items.value = items.value.map((i) => (i.uuid === uuid ? updated : i))
-    return updated
+    const patched = res.data as DriveItem
+    const settled = await awaitMoveSettled(uuid, patched)
+    if (!settled || settled.status !== 'ready') {
+      throw new MoveNotSettledError()
+    }
+    items.value = items.value.map((i) => (i.uuid === uuid ? settled : i))
+    return settled
   }
 
   async function move(uuid: string, parentUuid: string | null): Promise<DriveItem> {
     const res = await moveDriveItem(uuid, parentUuid)
-    const updated = res.data as DriveItem
-    // The item no longer belongs to the folder currently being listed.
+    const patched = res.data as DriveItem
+    const settled = await awaitMoveSettled(uuid, patched)
+    if (!settled || settled.status !== 'ready') {
+      // The move did not happen, so the item never left its folder: leave the
+      // listing untouched and let the dialog report the failure.
+      throw new MoveNotSettledError()
+    }
+    // Only now does the item truly belong to another folder.
     items.value = items.value.filter((i) => i.uuid !== uuid)
-    return updated
+    return settled
   }
 
   async function remove(uuid: string, permanent = true): Promise<void> {

@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useDriveItemsStore } from '@/stores/driveItems'
+import { useDriveItemsStore, MoveNotSettledError } from '@/stores/driveItems'
 import { ApiError } from '@/api/client'
 import type { DriveItem } from '@/api/driveItems'
 
@@ -58,7 +58,12 @@ async function submit() {
     emit('renamed', updated)
   } catch (e) {
     console.error(e)
-    error.value = e instanceof ApiError ? e.message : t('drive.action_failed')
+    if (e instanceof MoveNotSettledError) {
+      // The re-key failed or timed out: the name is unchanged on the server.
+      error.value = t('drive.rename_failed')
+    } else {
+      error.value = e instanceof ApiError ? e.message : t('drive.action_failed')
+    }
   } finally {
     saving.value = false
   }

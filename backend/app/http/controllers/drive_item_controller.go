@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/goravel/framework/contracts/http"
+	"github.com/goravel/framework/contracts/queue"
 
 	"ponta_drive/app/facades"
 	"ponta_drive/app/http/helpers"
 	"ponta_drive/app/http/requests"
+	"ponta_drive/app/jobs"
 	"ponta_drive/app/models"
 	"ponta_drive/app/services"
 )
@@ -201,7 +203,7 @@ func (c *DriveItemController) StoreFolder(ctx http.Context) http.Response {
 
 	folder, err := c.service.CreateFolder(context.Background(), user.ID, cloudAccountID, parentID, req.Name)
 	if err != nil {
-		return failResponse(ctx, http.StatusBadRequest, errKeyCreateFailed, err)
+		return failServiceError(ctx, err, errKeyCreateFailed)
 	}
 
 	activityService := services.NewActivityService()
@@ -265,15 +267,15 @@ func (c *DriveItemController) Update(ctx http.Context) http.Response {
 	}
 
 	var req requests.UpdateDriveItemRequest
-	errors, err := ctx.Request().ValidateRequest(&req)
+	valErrors, err := ctx.Request().ValidateRequest(&req)
 	if err != nil {
 		return failResponse(ctx, http.StatusBadRequest, "drive.invalid_request", err)
 	}
-	if errors != nil {
+	if valErrors != nil {
 		return ctx.Response().Json(http.StatusUnprocessableEntity, http.Json{
 			"status":  "error",
-			"message": errors.One(),
-			"errors":  errors.All(),
+			"message": valErrors.One(),
+			"errors":  valErrors.All(),
 		})
 	}
 
@@ -287,7 +289,6 @@ func (c *DriveItemController) Update(ctx http.Context) http.Response {
 	var parentID *uint
 	if req.ParentUUID != nil {
 		if *req.ParentUUID == "" {
-			// Move to root: the service treats a non-nil pointer to 0 as "detach".
 			var root uint
 			parentID = &root
 		} else {
@@ -299,24 +300,52 @@ func (c *DriveItemController) Update(ctx http.Context) http.Response {
 		}
 	}
 
-	// Capture the current name so a rename can be detected after the update:
-	// UpdateItem mutates and returns the same pointer, so item.Name afterwards
-	// already holds the new name.
-	previousName := ""
-	hasPrevious := false
-	if existing, fetchErr := c.service.GetItemByUUID(context.Background(), user.ID, itemUUID); fetchErr == nil {
-		previousName = existing.Name
-		hasPrevious = true
+	// Validate first: destination, cycle guard, name validity and uniqueness. A
+	// bad request is rejected before anything is written or queued.
+	if _, err := c.service.ValidateMove(context.Background(), user.ID, itemUUID, name, parentID); err != nil {
+		return failServiceError(ctx, err, "drive.update_failed")
 	}
 
-	item, err := c.service.UpdateItem(context.Background(), user.ID, itemUUID, name, parentID)
-	if err != nil {
+	// Refuse a second move while one is in flight. Only observable with an
+	// asynchronous queue; with the sync driver the first move already settled.
+	if existing, fetchErr := c.service.GetItemByUUID(context.Background(), user.ID, itemUUID); fetchErr == nil && existing.Status == models.ItemStatusMoving {
+		return failResponse(ctx, http.StatusConflict, "drive.move_in_progress", errors.New("item is already moving"))
+	}
+
+	// Mark the item moving, then hand the re-key to the queue. The item keeps
+	// its old name and location until the job copies the object and updates the
+	// row, so a failure leaves it intact at its old key.
+	_, _ = facades.Orm().Query().Model(&models.DriveItem{}).
+		Where("uuid", itemUUID).Where("user_id", user.ID).
+		Update(map[string]any{"status": models.ItemStatusMoving})
+
+	parentValue := uint(0)
+	hasParentChange := parentID != nil
+	if parentID != nil {
+		parentValue = *parentID
+	}
+
+	job := &jobs.RekeyDriveItemJob{}
+	if err := facades.Queue().Job(job, []queue.Arg{
+		{Value: user.ID, Type: "uint"},
+		{Value: itemUUID, Type: "string"},
+		{Value: name, Type: "string"},
+		{Value: parentValue, Type: "uint"},
+		{Value: hasParentChange, Type: "bool"},
+	}).Dispatch(); err != nil {
+		facades.Log().Errorf("[drive] rekey dispatch failed item=%s: %v", itemUUID, err)
+		_, _ = facades.Orm().Query().Model(&models.DriveItem{}).
+			Where("uuid", itemUUID).Where("user_id", user.ID).
+			Update(map[string]any{"status": models.ItemStatusFailed})
 		return failResponse(ctx, http.StatusBadRequest, "drive.update_failed", err)
 	}
 
-	if shouldLogRename(hasPrevious, name, previousName) {
-		activityService := services.NewActivityService()
-		activityService.LogSafe(user.ID, item.CloudAccountID, "renamed", fmt.Sprintf("%s -> %s", previousName, name), &item.UUID, helpers.GetClientIP(ctx), helpers.GetUserAgent(ctx), nil)
+	// With the sync driver the job already ran, so this carries the settled
+	// item; with the database driver it carries the moving item and the client
+	// polls until the status settles.
+	item, err := c.service.GetItemByUUID(context.Background(), user.ID, itemUUID)
+	if err != nil {
+		return failResponse(ctx, http.StatusBadRequest, "drive.update_failed", err)
 	}
 
 	return ctx.Response().Success().Json(http.Json{

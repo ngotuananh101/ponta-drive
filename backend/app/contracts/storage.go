@@ -58,6 +58,10 @@ type CloudDriver interface {
 	AbortMultipart(ctx context.Context, key string, uploadID string) error
 	ListObjects(ctx context.Context, prefix string, continuationToken string, maxKeys int32) (*ListObjectsResult, error)
 	DeleteObjects(ctx context.Context, keys []string) error
+	// CopyObject copies srcKey to dstKey server-side. Objects larger than the S3
+	// single-copy limit (5 GiB) are copied with a multipart copy, so the caller
+	// never has to know the size threshold.
+	CopyObject(ctx context.Context, srcKey string, dstKey string) error
 	GetBucketCors(ctx context.Context) ([]CORSRule, error)
 	PutBucketCors(ctx context.Context, rules []CORSRule) error
 	// GetRange reads [offset, offset+length) of an object; length < 0 reads to

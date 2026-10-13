@@ -95,7 +95,7 @@ func (c *UploadController) InitiatePresigned(ctx http.Context) http.Response {
 		req.MimeType,
 	)
 	if err != nil {
-		return failResponse(ctx, http.StatusBadRequest, errKeyUploadInitiateFailed, err)
+		return failServiceError(ctx, err, errKeyUploadInitiateFailed)
 	}
 
 	return ctx.Response().Success().Json(http.Json{
@@ -181,7 +181,7 @@ func (c *UploadController) InitMultipart(ctx http.Context) http.Response {
 		req.ChunkSize,
 	)
 	if err != nil {
-		return failResponse(ctx, http.StatusBadRequest, errKeyUploadInitiateFailed, err)
+		return failServiceError(ctx, err, errKeyUploadInitiateFailed)
 	}
 
 	return ctx.Response().Success().Json(http.Json{

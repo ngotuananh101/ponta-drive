@@ -21,7 +21,7 @@ backend/main.new
 
 # Storage
 backend/storage
-storage
+/storage
 
 # Superpowers scratch
 .superpowers

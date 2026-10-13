@@ -250,3 +250,39 @@ func (s *MultipartUploadTestSuite) TestMultipartUploadAbort() {
 	_ = facades.Orm().Query().Where("session_id", sessionID).First(&abortedSession)
 	s.Zero(abortedSession.ID)
 }
+
+// createFolder posts a root-level folder and returns its uuid.
+func (s *MultipartUploadTestSuite) createFolder(name string) string {
+	payload, _ := json.Marshal(map[string]any{
+		"cloud_account_id": s.account.ID,
+		"name":             name,
+	})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		Post("/v1/drive/items/folders", bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusCreated)
+	body, _ := resp.Json()
+	return body["data"].(map[string]any)["uuid"].(string)
+}
+
+// TestMultipartUploadUsesFolderKey mirrors the presigned case for the chunked
+// path: the session's storage_path must be the folder-structured key.
+func (s *MultipartUploadTestSuite) TestMultipartUploadUsesFolderKey() {
+	folderUUID := s.createFolder("Tài liệu")
+
+	payload, _ := json.Marshal(map[string]any{
+		"cloud_account_id": s.account.ID,
+		"parent_uuid":      folderUUID,
+		"file_name":        "archive.zip",
+		"size":             16,
+		"mime_type":        "application/zip",
+	})
+	resp, err := s.Http(s.T()).WithToken(s.token).Post("/v1/drive/upload/multipart/init", bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertOk()
+
+	body, _ := resp.Json()
+	data := body["data"].(map[string]any)
+	want := fmt.Sprintf("users/%d/Tài liệu/archive.zip", s.user.ID)
+	s.Equal(want, data["storage_path"])
+}

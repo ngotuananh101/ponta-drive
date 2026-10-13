@@ -26,6 +26,7 @@ import {
   Pencil,
   Trash2,
   HardDriveDownload,
+  TriangleAlert,
 } from 'lucide-vue-next'
 import { fetchDashboardSummary, type CloudAccount, type DashboardSummary } from '@/api/dashboard'
 import type { DriveItem } from '@/api/driveItems'
@@ -161,6 +162,8 @@ function activityIcon(action: string) {
       return FolderPlus
     case 'shared':
       return Share2
+    case 'move_failed':
+      return TriangleAlert
     default:
       return HardDriveDownload
   }
@@ -183,6 +186,8 @@ function activityIconColor(action: string) {
       return 'text-amber-500'
     case 'shared':
       return 'text-purple-500'
+    case 'move_failed':
+      return 'text-rose-500'
     default:
       return 'text-emerald-500'
   }

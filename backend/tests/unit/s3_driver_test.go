@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -372,3 +374,110 @@ func TestS3DriverGetRangeToEnd(t *testing.T) {
 	assert.Equal(t, "56789", string(got))
 	assert.Equal(t, int64(10), total)
 }
+
+// newCopyTestDriver builds a driver over a mock S3 server that records copy
+// requests. copyCalls counts single CopyObject calls; partCopies counts
+// UploadPartCopy calls; sourceHeaders records each x-amz-copy-source value.
+func newCopyTestDriver(t *testing.T, size int64) (*storage.S3Driver, *int32, *int32, *[]string) {
+	t.Helper()
+	var copyCalls, partCopies int32
+	var sources []string
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead:
+			w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("ETag", `"src-etag"`)
+			w.WriteHeader(http.StatusOK)
+
+		// UploadPartCopy is a PUT that carries BOTH the x-amz-copy-source
+		// header AND a partNumber query param, so it must be matched before the
+		// plain single-copy case below — otherwise every part lands in the
+		// single-copy branch and the multipart path is never exercised.
+		case r.Method == http.MethodPut && r.URL.Query().Has("partNumber"):
+			mu.Lock()
+			sources = append(sources, r.Header.Get("x-amz-copy-source"))
+			mu.Unlock()
+			atomic.AddInt32(&partCopies, 1)
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<CopyPartResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <ETag>&quot;part-etag&quot;</ETag>
+  <LastModified>2026-10-13T00:00:00.000Z</LastModified>
+</CopyPartResult>`))
+
+		case r.Method == http.MethodPut && r.Header.Get("x-amz-copy-source") != "":
+			mu.Lock()
+			sources = append(sources, r.Header.Get("x-amz-copy-source"))
+			mu.Unlock()
+			atomic.AddInt32(&copyCalls, 1)
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<CopyObjectResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <ETag>&quot;dst-etag&quot;</ETag>
+  <LastModified>2026-10-13T00:00:00.000Z</LastModified>
+</CopyObjectResult>`))
+
+		case r.Method == http.MethodPost && r.URL.Query().Has("uploads"):
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Bucket>test-bucket</Bucket><Key>dst.bin</Key><UploadId>copy-upload-1</UploadId>
+</InitiateMultipartUploadResult>`))
+
+		case r.Method == http.MethodPost && r.URL.Query().Has("uploadId"):
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Bucket>test-bucket</Bucket><Key>dst.bin</Key><ETag>&quot;final&quot;</ETag>
+</CompleteMultipartUploadResult>`))
+
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	driver, err := storage.NewS3Driver(context.Background(), storage.S3Config{
+		Bucket:          "test-bucket",
+		Region:          "us-east-1",
+		AccessKeyID:     "k",
+		SecretAccessKey: "s",
+		Endpoint:        server.URL,
+		UsePathStyle:    true,
+	})
+	require.NoError(t, err)
+
+	return driver, &copyCalls, &partCopies, &sources
+}
+
+// TestS3DriverCopyObjectSmallUsesSingleCopy pins the small-object path.
+func TestS3DriverCopyObjectSmallUsesSingleCopy(t *testing.T) {
+	driver, copyCalls, partCopies, sources := newCopyTestDriver(t, 1024)
+
+	err := driver.CopyObject(context.Background(), "users/1/Tài liệu/a b.txt", "users/1/docs/a b.txt")
+	require.NoError(t, err)
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(copyCalls))
+	assert.Equal(t, int32(0), atomic.LoadInt32(partCopies))
+	require.Len(t, *sources, 1)
+	// Encoded per segment: the "/" separators survive, the space and the
+	// non-ASCII do not.
+	assert.Equal(t, "test-bucket/users/1/T%C3%A0i%20li%E1%BB%87u/a%20b.txt", (*sources)[0])
+}
+
+// TestS3DriverCopyObjectLargeUsesMultipartCopy pins the > 5 GiB path: it must
+// not call CopyObject at all.
+func TestS3DriverCopyObjectLargeUsesMultipartCopy(t *testing.T) {
+	const size = 5*1024*1024*1024 + 1
+	driver, copyCalls, partCopies, _ := newCopyTestDriver(t, size)
+
+	err := driver.CopyObject(context.Background(), "users/1/big.bin", "users/1/docs/big.bin")
+	require.NoError(t, err)
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(copyCalls), "a >5 GiB object must not use a single CopyObject")
+	assert.GreaterOrEqual(t, atomic.LoadInt32(partCopies), int32(5), "5 GiB + 1 byte needs at least 5 one-GiB parts")
+}
+

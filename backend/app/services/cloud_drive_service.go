@@ -7,10 +7,12 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/goravel/framework/contracts/database/orm"
 	"github.com/goravel/framework/support/carbon"
 
 	"ponta_drive/app/contracts"
@@ -117,12 +119,20 @@ func (s *CloudDriveService) CreateFolder(ctx context.Context, userID uint, cloud
 		}
 	}
 
+	trimmedName := strings.TrimSpace(name)
+	if err := ValidateItemName(trimmedName); err != nil {
+		return nil, err
+	}
+	if err := s.EnsureUniqueName(ctx, userID, cloudAccountID, parentID, trimmedName, 0); err != nil {
+		return nil, err
+	}
+
 	folder := &models.DriveItem{
 		UUID:           uuid.New().String(),
 		UserID:         userID,
 		CloudAccountID: cloudAccountID,
 		ParentID:       parentID,
-		Name:           strings.TrimSpace(name),
+		Name:           trimmedName,
 		Type:           models.ItemTypeFolder,
 		Status:         models.ItemStatusReady,
 	}
@@ -264,15 +274,15 @@ func (s *CloudDriveService) GetBreadcrumb(ctx context.Context, userID uint, item
 	return chain, nil
 }
 
-// UpdateItem updates name or parent folder of an item.
-func (s *CloudDriveService) UpdateItem(ctx context.Context, userID uint, itemUUID string, newName string, newParentID *uint) (*models.DriveItem, error) {
+// ValidateMove resolves and checks a rename/move without writing anything: the
+// item exists, the destination is an existing folder in the same account, the
+// move cannot create a cycle, and the resulting name is valid and unique in its
+// destination folder. It returns the item as it is today (unchanged) so the
+// caller can log against the current name.
+func (s *CloudDriveService) ValidateMove(ctx context.Context, userID uint, itemUUID string, newName string, newParentID *uint) (*models.DriveItem, error) {
 	item, err := s.GetItemByUUID(ctx, userID, itemUUID)
 	if err != nil {
 		return nil, err
-	}
-
-	if strings.TrimSpace(newName) != "" {
-		item.Name = strings.TrimSpace(newName)
 	}
 
 	if newParentID != nil {
@@ -293,16 +303,69 @@ func (s *CloudDriveService) UpdateItem(ctx context.Context, userID uint, itemUUI
 				return nil, errors.New("destination is not a folder")
 			}
 			// Prevent cycles: the destination must not be the item itself or one
-			// of its own descendants. Walk up from the destination; if we reach
-			// the item, the move would create a loop.
+			// of its own descendants.
 			if s.isSelfOrDescendant(userID, item.CloudAccountID, *newParentID, item.ID) {
 				return nil, errors.New("cannot move a folder into itself or its own subfolder")
 			}
+		}
+	}
+
+	// The name the item will carry once the move settles. A rename is validated
+	// only when the caller supplies one: an existing item may predate the rule.
+	finalName := item.Name
+	if trimmed := strings.TrimSpace(newName); trimmed != "" {
+		if err := ValidateItemName(trimmed); err != nil {
+			return nil, err
+		}
+		finalName = trimmed
+	}
+
+	// The folder the item will live in once the move settles. A non-nil pointer
+	// to 0 means "the drive root", which is parent_id IS NULL.
+	destParentID := item.ParentID
+	if newParentID != nil {
+		if *newParentID == 0 {
+			destParentID = nil
+		} else {
+			destParentID = newParentID
+		}
+	}
+
+	if err := s.EnsureUniqueName(ctx, userID, item.CloudAccountID, destParentID, finalName, item.ID); err != nil {
+		return nil, err
+	}
+
+	return item, nil
+}
+
+// ApplyMove performs the database part of a rename/move: it writes the item's
+// new name, parent_id and storage_path (when one is supplied) and marks it
+// ready. Destination and name checks belong to ValidateMove, which must run
+// first. A settled move always ends at status = ready, so this also clears the
+// "moving" marker the controller sets before dispatching a re-key job.
+func (s *CloudDriveService) ApplyMove(ctx context.Context, userID uint, itemUUID string, newName string, newParentID *uint, newStoragePath string) (*models.DriveItem, error) {
+	item, err := s.GetItemByUUID(ctx, userID, itemUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.TrimSpace(newName) != "" {
+		item.Name = strings.TrimSpace(newName)
+	}
+
+	if newParentID != nil {
+		if *newParentID > 0 {
 			item.ParentID = newParentID
 		} else {
 			item.ParentID = nil
 		}
 	}
+
+	if newStoragePath != "" {
+		item.StoragePath = newStoragePath
+	}
+
+	item.Status = models.ItemStatusReady
 
 	if err := facades.Orm().Query().Save(item); err != nil {
 		return nil, err
@@ -518,8 +581,19 @@ func (s *CloudDriveService) InitiatePresignedUpload(ctx context.Context, userID 
 		}
 	}
 
+	if err := ValidateItemName(fileName); err != nil {
+		return nil, nil, err
+	}
+	if err := s.EnsureUniqueName(ctx, userID, cloudAccountID, parentID, fileName, 0); err != nil {
+		return nil, nil, err
+	}
+
 	fileExt := strings.TrimPrefix(filepath.Ext(fileName), ".")
-	storageKey := fmt.Sprintf("users/%d/items/%s-%s", userID, uuid.New().String(), fileName)
+	fp, err := s.folderPath(ctx, userID, cloudAccountID, parentID)
+	if err != nil {
+		return nil, nil, err
+	}
+	storageKey := buildStorageKey(userID, fp, fileName)
 
 	item := &models.DriveItem{
 		UUID:           uuid.New().String(),
@@ -608,6 +682,13 @@ func (s *CloudDriveService) InitiateMultipartUpload(ctx context.Context, userID 
 		}
 	}
 
+	if err := ValidateItemName(fileName); err != nil {
+		return nil, err
+	}
+	if err := s.EnsureUniqueName(ctx, userID, cloudAccountID, parentID, fileName, 0); err != nil {
+		return nil, err
+	}
+
 	if chunkSize <= 0 {
 		chunkSize = 5 * 1024 * 1024 // 5MB default chunk size
 	}
@@ -617,7 +698,11 @@ func (s *CloudDriveService) InitiateMultipartUpload(ctx context.Context, userID 
 		totalParts = 1
 	}
 
-	storageKey := fmt.Sprintf("users/%d/items/%s-%s", userID, uuid.New().String(), fileName)
+	fp, err := s.folderPath(ctx, userID, cloudAccountID, parentID)
+	if err != nil {
+		return nil, err
+	}
+	storageKey := buildStorageKey(userID, fp, fileName)
 
 	uploadID, err := driver.InitiateMultipart(ctx, storageKey, mimeType)
 	if err != nil {
@@ -867,18 +952,17 @@ func (s *CloudDriveService) ScanBucket(ctx context.Context, userID uint, cloudAc
 				continue
 			}
 
-			// An object the app itself uploaded is stored flat under the reserved
-			// internal prefix (users/<id>/items/<uuid>-<name>) and already has a
-			// DriveItem row carrying the user's real ParentID. That key path is a
-			// storage detail, not a user-visible folder tree, so never derive
-			// folders from it and never re-parent the item: the DB row is
-			// authoritative. Refresh only the metadata that S3 owns.
+			// A tracked row (same storage_path) is authoritative for any key shape:
+			// refresh the metadata S3 owns and keep its existing parent_id. Path
+			// derivation and folder materialization only run for untracked keys
+			// (post-reset recovery or newly discovered bucket objects).
 			var tracked models.DriveItem
 			_ = facades.Orm().Query().
 				Where("user_id", userID).
 				Where("cloud_account_id", cloudAccountID).
-				Where("storage_path", obj.Key).
+				Where("storage_path = ? OR storage_path = ?", obj.Key, key).
 				First(&tracked)
+
 			if tracked.ID > 0 {
 				tracked.Size = obj.Size
 				tracked.ETag = obj.ETag
@@ -888,128 +972,52 @@ func (s *CloudDriveService) ScanBucket(ctx context.Context, userID uint, cloudAc
 				continue
 			}
 
-			// Check if this is an S3 directory marker (ends with /)
-			isDirMarker := strings.HasSuffix(key, "/")
-			trimmedKey := strings.Trim(key, "/")
-			segments := strings.Split(trimmedKey, "/")
-			if len(segments) == 0 {
+			shape, recoveredName := classifyKey(userID, key)
+
+			if shape == scanShapeLegacy {
+				// The row is untracked — the database was reset while the bucket still holds
+				// the legacy object. Recover the user-facing name and attach the file at
+				// the scan root, avoiding phantom users/<id>/items folders.
+				if recoveredName == "" {
+					continue
+				}
+
+				if err := s.upsertScannedFile(ctx, userID, cloudAccountID, parentID, obj, recoveredName); err == nil {
+					syncedCount++
+				}
 				continue
 			}
 
-			currentParentID := parentID
+			// New-scheme and external keys both derive folders from segments. A
+			// new-scheme key drops the users/<uid>/ prefix first; an external key
+			// keeps its whole path.
+			derivedKey := key
+			if shape == scanShapeNew {
+				derivedKey = strings.TrimPrefix(key, fmt.Sprintf("users/%d/", userID))
+			}
+
+			isDirMarker := strings.HasSuffix(derivedKey, "/")
+			trimmedKey := strings.Trim(derivedKey, "/")
+			segments := strings.Split(trimmedKey, "/")
+			if len(segments) == 0 || trimmedKey == "" {
+				continue
+			}
 
 			if isDirMarker {
-				// Ensure all segments are created as folders
-				for _, folderName := range segments {
-					if folderName == "" {
-						continue
-					}
-					var folder models.DriveItem
-					q := facades.Orm().Query().
-						Where("user_id", userID).
-						Where("cloud_account_id", cloudAccountID).
-						Where("name", folderName).
-						Where("type", models.ItemTypeFolder)
-					if currentParentID == nil {
-						q = q.Where("parent_id IS NULL")
-					} else {
-						q = q.Where("parent_id = ?", *currentParentID)
-					}
-					_ = q.First(&folder)
-
-					if folder.ID == 0 {
-						folder = models.DriveItem{
-							UUID:           uuid.New().String(),
-							UserID:         userID,
-							CloudAccountID: cloudAccountID,
-							ParentID:       currentParentID,
-							Name:           folderName,
-							Type:           models.ItemTypeFolder,
-							Status:         models.ItemStatusReady,
-						}
-						_ = facades.Orm().Query().Create(&folder)
-					}
-					fID := folder.ID
-					currentParentID = &fID
+				// A directory marker has no trailing file: every segment is a folder.
+				if _, err := s.materializeFolders(ctx, userID, cloudAccountID, parentID, segments); err == nil {
+					syncedCount++
 				}
-			} else {
-				// Ensure parent directory folders exist
-				for i := 0; i < len(segments)-1; i++ {
-					folderName := segments[i]
-					if folderName == "" {
-						continue
-					}
-					var folder models.DriveItem
-					q := facades.Orm().Query().
-						Where("user_id", userID).
-						Where("cloud_account_id", cloudAccountID).
-						Where("name", folderName).
-						Where("type", models.ItemTypeFolder)
-					if currentParentID == nil {
-						q = q.Where("parent_id IS NULL")
-					} else {
-						q = q.Where("parent_id = ?", *currentParentID)
-					}
-					_ = q.First(&folder)
+				continue
+			}
 
-					if folder.ID == 0 {
-						folder = models.DriveItem{
-							UUID:           uuid.New().String(),
-							UserID:         userID,
-							CloudAccountID: cloudAccountID,
-							ParentID:       currentParentID,
-							Name:           folderName,
-							Type:           models.ItemTypeFolder,
-							Status:         models.ItemStatusReady,
-						}
-						_ = facades.Orm().Query().Create(&folder)
-					}
-					fID := folder.ID
-					currentParentID = &fID
-				}
-
-				// Upsert the file
-				fileName := segments[len(segments)-1]
-				fileExt := strings.TrimPrefix(filepath.Ext(fileName), ".")
-
-				// Not tracked by storage_path (checked above), so match an
-				// existing row by name within the derived folder, else create.
-				var nameMatch models.DriveItem
-				q := facades.Orm().Query().
-					Where("user_id", userID).
-					Where("cloud_account_id", cloudAccountID).
-					Where("name", fileName).
-					Where("type", models.ItemTypeFile)
-				if currentParentID == nil {
-					q = q.Where("parent_id IS NULL")
-				} else {
-					q = q.Where("parent_id = ?", *currentParentID)
-				}
-				_ = q.First(&nameMatch)
-
-				if nameMatch.ID > 0 {
-					nameMatch.StoragePath = obj.Key
-					nameMatch.Size = obj.Size
-					nameMatch.ETag = obj.ETag
-					nameMatch.Status = models.ItemStatusReady
-					_ = facades.Orm().Query().Save(&nameMatch)
-				} else {
-					newItem := models.DriveItem{
-						UUID:           uuid.New().String(),
-						UserID:         userID,
-						CloudAccountID: cloudAccountID,
-						ParentID:       currentParentID,
-						Name:           fileName,
-						Type:           models.ItemTypeFile,
-						MimeType:       obj.MimeType,
-						Size:           obj.Size,
-						Extension:      fileExt,
-						StoragePath:    obj.Key,
-						ETag:           obj.ETag,
-						Status:         models.ItemStatusReady,
-					}
-					_ = facades.Orm().Query().Create(&newItem)
-				}
+			// The trailing segment is the file; the rest are its folders.
+			fileParent, err := s.materializeFolders(ctx, userID, cloudAccountID, parentID, segments[:len(segments)-1])
+			if err != nil {
+				continue
+			}
+			fileName := segments[len(segments)-1]
+			if err := s.upsertScannedFile(ctx, userID, cloudAccountID, fileParent, obj, fileName); err == nil {
 				syncedCount++
 			}
 		}
@@ -1034,6 +1042,95 @@ func (s *CloudDriveService) ScanBucket(ctx context.Context, userID uint, cloudAc
 	}
 
 	return syncedCount, nil
+}
+
+// materializeFolders ensures every segment exists as a folder under parentID,
+// creating the missing ones, and returns the deepest folder's id (nil for an
+// empty segment list). It is the folder-derivation loop the old ScanBucket
+// else-branch ran inline, shared by the new-scheme path, the external path, and
+// the directory-marker case.
+func (s *CloudDriveService) materializeFolders(ctx context.Context, userID, cloudAccountID uint, parentID *uint, segments []string) (*uint, error) {
+	currentParentID := parentID
+	for _, folderName := range segments {
+		if folderName == "" {
+			continue
+		}
+		var folder models.DriveItem
+		q := facades.Orm().Query().
+			Where("user_id", userID).
+			Where("cloud_account_id", cloudAccountID).
+			Where("name", folderName).
+			Where("type", models.ItemTypeFolder)
+		if currentParentID == nil {
+			q = q.Where("parent_id IS NULL")
+		} else {
+			q = q.Where("parent_id = ?", *currentParentID)
+		}
+		_ = q.First(&folder)
+
+		if folder.ID == 0 {
+			folder = models.DriveItem{
+				UUID:           uuid.New().String(),
+				UserID:         userID,
+				CloudAccountID: cloudAccountID,
+				ParentID:       currentParentID,
+				Name:           folderName,
+				Type:           models.ItemTypeFolder,
+				Status:         models.ItemStatusReady,
+			}
+			if err := facades.Orm().Query().Create(&folder); err != nil {
+				return nil, err
+			}
+		}
+		fID := folder.ID
+		currentParentID = &fID
+	}
+	return currentParentID, nil
+}
+
+// upsertScannedFile records a scanned object as a file row under parentID,
+// matching an existing row by name so a re-scan does not duplicate it. The key
+// was not tracked by storage_path (the caller checked), so a name match within
+// the derived folder is the identity.
+func (s *CloudDriveService) upsertScannedFile(ctx context.Context, userID, cloudAccountID uint, parentID *uint, obj contracts.ObjectMetadata, name string) error {
+	fileExt := strings.TrimPrefix(filepath.Ext(name), ".")
+
+	var nameMatch models.DriveItem
+	q := facades.Orm().Query().
+		Where("user_id", userID).
+		Where("cloud_account_id", cloudAccountID).
+		Where("name", name).
+		Where("type", models.ItemTypeFile)
+	if parentID == nil {
+		q = q.Where("parent_id IS NULL")
+	} else {
+		q = q.Where("parent_id = ?", *parentID)
+	}
+	_ = q.First(&nameMatch)
+
+	if nameMatch.ID > 0 {
+		nameMatch.StoragePath = obj.Key
+		nameMatch.Size = obj.Size
+		nameMatch.ETag = obj.ETag
+		nameMatch.Status = models.ItemStatusReady
+		return facades.Orm().Query().Save(&nameMatch)
+	}
+
+	newItem := models.DriveItem{
+		UUID:           uuid.New().String(),
+		UserID:         userID,
+		CloudAccountID: cloudAccountID,
+		ParentID:       parentID,
+		Name:           name,
+		Type:           models.ItemTypeFile,
+		MimeType:       obj.MimeType,
+		Size:           obj.Size,
+		Extension:      fileExt,
+		StoragePath:    obj.Key,
+		ETag:           obj.ETag,
+		Status:         models.ItemStatusReady,
+	}
+	return facades.Orm().Query().Create(&newItem)
 }
 
 // PreviewResult is the resolved way to preview one file.
@@ -1137,4 +1234,278 @@ func (s *CloudDriveService) ResolvePreview(ctx context.Context, userID uint, ite
 	}
 
 	return result, nil
+}
+
+// internalUploadPrefix is the reserved key prefix under which the app stores
+// objects it uploaded: users/<userID>/items/. The <uuid>- prefix that follows
+// on each key is an implementation detail, never part of the user-facing name.
+func internalUploadPrefix(userID uint) string {
+	return fmt.Sprintf("users/%d/items/", userID)
+}
+
+// uuidPrefixPattern matches the "<uuid>-" head of an app-uploaded object's
+// final key segment, e.g. "09d3c478-1bfe-449b-a202-e84ef72b16e5-file.docx".
+var uuidPrefixPattern = regexp.MustCompile(
+	`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}-`,
+)
+
+// internalUploadRealName recovers the user-facing file name from an app-uploaded
+// object key. It returns "" when the key is not shaped like an app upload (no
+// uuid prefix, or nothing after it), so callers can fall back to normal
+// derivation instead of losing the object.
+func internalUploadRealName(key string) string {
+	base := key[strings.LastIndex(key, "/")+1:]
+	stripped := uuidPrefixPattern.ReplaceAllString(base, "")
+	if stripped == "" || stripped == base {
+		return ""
+	}
+	return stripped
+}
+
+// RekeyItem is the body of RekeyDriveItemJob: after a rename/move it copies the
+// object(s) to their new key, updates the database, then deletes the old
+// object(s). It runs outside the request, so a large folder move cannot time
+// out the caller.
+//
+// An item with no object to move (a file with an empty storage_path, a folder
+// with no file descendants) updates its row without any S3 call.
+func (s *CloudDriveService) RekeyItem(ctx context.Context, userID uint, itemUUID string, newName string, newParentID *uint) error {
+	item, err := s.GetItemByUUID(ctx, userID, itemUUID)
+	if err != nil {
+		return err
+	}
+	previousName := item.Name
+
+	driver, _, err := s.GetDriver(ctx, userID, item.CloudAccountID)
+	if err != nil {
+		return s.markRekeyFailed(ctx, userID, item, err)
+	}
+
+	if item.IsFolder() {
+		err = s.rekeyFolder(ctx, userID, driver, item, newName, newParentID)
+	} else {
+		err = s.rekeyFile(ctx, userID, driver, item, newName, newParentID)
+	}
+	if err != nil {
+		return s.markRekeyFailed(ctx, userID, item, err)
+	}
+
+	finalName := item.Name
+	if trimmed := strings.TrimSpace(newName); trimmed != "" {
+		finalName = trimmed
+	}
+	if finalName != previousName {
+		activityService := NewActivityService()
+		activityService.LogSafe(userID, item.CloudAccountID, "renamed",
+			fmt.Sprintf("%s -> %s", previousName, finalName), &item.UUID, "system", "Queue Worker", nil)
+	}
+	return nil
+}
+
+// rekeyFile re-keys a single file: copy to the new key, update the row, delete
+// the old object.
+func (s *CloudDriveService) rekeyFile(ctx context.Context, userID uint, driver contracts.CloudDriver, item *models.DriveItem, newName string, newParentID *uint) error {
+	finalName := item.Name
+	if trimmed := strings.TrimSpace(newName); trimmed != "" {
+		finalName = trimmed
+	}
+
+	destParentID := item.ParentID
+	if newParentID != nil {
+		if *newParentID == 0 {
+			destParentID = nil
+		} else {
+			destParentID = newParentID
+		}
+	}
+
+	destPath, err := s.folderPath(ctx, userID, item.CloudAccountID, destParentID)
+	if err != nil {
+		return err
+	}
+	newKey := buildStorageKey(userID, destPath, finalName)
+
+	// Nothing to copy: no object, or the key does not change. Update the row
+	// (and clear the moving marker) without touching S3.
+	if item.StoragePath == "" || item.StoragePath == newKey {
+		_, err = s.ApplyMove(ctx, userID, item.UUID, newName, newParentID, item.StoragePath)
+		return err
+	}
+
+	oldKey := item.StoragePath
+	if err := driver.CopyObject(ctx, oldKey, newKey); err != nil {
+		return err
+	}
+	if _, err := s.ApplyMove(ctx, userID, item.UUID, newName, newParentID, newKey); err != nil {
+		// The row was not updated, so remove the object we just created to
+		// avoid an orphan at the new key.
+		_ = driver.Delete(ctx, newKey)
+		return err
+	}
+	// The row already points at the new key. A failed delete leaves a stale
+	// object, which is a cleanup issue, not a failed move.
+	if err := driver.Delete(ctx, oldKey); err != nil {
+		facades.Log().Errorf("[drive] rekey: failed to delete old object %q: %v", oldKey, err)
+	}
+	return nil
+}
+
+// rekeyFolder re-keys every file in a moved folder. Each file's new key is
+// derived from its own name and its path inside the moved subtree — not by
+// substituting the old key's prefix, because a descendant may still carry a
+// legacy flat key that shares no prefix with its siblings.
+func (s *CloudDriveService) rekeyFolder(ctx context.Context, userID uint, driver contracts.CloudDriver, item *models.DriveItem, newName string, newParentID *uint) error {
+	allItems, _, _, err := s.CollectDescendantItems(ctx, userID, item.CloudAccountID, item.ID)
+	if err != nil {
+		return err
+	}
+
+	finalName := item.Name
+	if trimmed := strings.TrimSpace(newName); trimmed != "" {
+		finalName = trimmed
+	}
+
+	destParentID := item.ParentID
+	if newParentID != nil {
+		if *newParentID == 0 {
+			destParentID = nil
+		} else {
+			destParentID = newParentID
+		}
+	}
+
+	destPath, err := s.folderPath(ctx, userID, item.CloudAccountID, destParentID)
+	if err != nil {
+		return err
+	}
+	newFolderPath := finalName
+	if destPath != "" {
+		newFolderPath = destPath + "/" + finalName
+	}
+
+	byID := make(map[uint]models.DriveItem, len(allItems))
+	for _, it := range allItems {
+		byID[it.ID] = it
+	}
+
+	type rekeyMove struct {
+		id     uint
+		oldKey string
+		newKey string
+	}
+	var moves []rekeyMove
+	for _, it := range allItems {
+		if !it.IsFile() || it.StoragePath == "" {
+			continue
+		}
+		rel, err := relativeFolderPath(byID, item.ID, it)
+		if err != nil {
+			return err
+		}
+		filePath := newFolderPath
+		if rel != "" {
+			filePath = newFolderPath + "/" + rel
+		}
+		newKey := buildStorageKey(userID, filePath, it.Name)
+		if newKey == it.StoragePath {
+			continue
+		}
+		moves = append(moves, rekeyMove{id: it.ID, oldKey: it.StoragePath, newKey: newKey})
+	}
+
+	var copiedNewKeys []string
+	for _, m := range moves {
+		if err := driver.CopyObject(ctx, m.oldKey, m.newKey); err != nil {
+			_ = driver.DeleteObjects(ctx, copiedNewKeys)
+			return err
+		}
+		copiedNewKeys = append(copiedNewKeys, m.newKey)
+	}
+
+	err = facades.Orm().Transaction(func(tx orm.Query) error {
+		folderUpdate := map[string]any{"name": finalName, "status": models.ItemStatusReady}
+		if newParentID != nil {
+			if *newParentID > 0 {
+				folderUpdate["parent_id"] = *newParentID
+			} else {
+				folderUpdate["parent_id"] = nil
+			}
+		}
+		if _, err := tx.Model(&models.DriveItem{}).Where("id", item.ID).Update(folderUpdate); err != nil {
+			return err
+		}
+		for _, m := range moves {
+			if _, err := tx.Model(&models.DriveItem{}).Where("id", m.id).Update(map[string]any{
+				"storage_path": m.newKey,
+				"status":       models.ItemStatusReady,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		_ = driver.DeleteObjects(ctx, copiedNewKeys)
+		return err
+	}
+
+	if len(moves) > 0 {
+		oldKeys := make([]string, 0, len(moves))
+		for _, m := range moves {
+			oldKeys = append(oldKeys, m.oldKey)
+		}
+		if err := driver.DeleteObjects(ctx, oldKeys); err != nil {
+			facades.Log().Errorf("[drive] rekey folder: failed to delete old objects: %v", err)
+		}
+	}
+	return nil
+}
+
+// markRekeyFailed leaves the item at its old location (nothing was written
+// before the failure) and records the failed status and activity.
+func (s *CloudDriveService) markRekeyFailed(ctx context.Context, userID uint, item *models.DriveItem, cause error) error {
+	_, _ = facades.Orm().Query().Model(&models.DriveItem{}).Where("id", item.ID).
+		Update(map[string]any{"status": models.ItemStatusFailed})
+
+	facades.Log().Errorf("[drive] rekey failed item=%d (%s): %v", item.ID, item.Name, cause)
+
+	activityService := NewActivityService()
+	activityService.LogSafe(userID, item.CloudAccountID, "move_failed", item.Name, &item.UUID, "system", "Queue Worker", nil)
+
+	return cause
+}
+
+// relativeFolderPath returns the "/"-joined folder names strictly below rootID
+// on the path from rootID down to item's parent. It returns "" when item is a
+// direct child of rootID, so a direct child's key needs no extra segment. The
+// walk is guarded against a corrupted cycle.
+func relativeFolderPath(byID map[uint]models.DriveItem, rootID uint, item models.DriveItem) (string, error) {
+	if item.ParentID == nil || *item.ParentID == rootID {
+		return "", nil
+	}
+
+	seen := map[uint]bool{}
+	var reversed []string
+	current := *item.ParentID
+	for current != 0 && current != rootID {
+		if seen[current] {
+			return "", errors.New("cycle in folder tree")
+		}
+		seen[current] = true
+		node, ok := byID[current]
+		if !ok {
+			return "", errors.New("descendant folder not found")
+		}
+		reversed = append(reversed, node.Name)
+		if node.ParentID == nil {
+			break
+		}
+		current = *node.ParentID
+	}
+
+	parts := make([]string, 0, len(reversed))
+	for i := len(reversed) - 1; i >= 0; i-- {
+		parts = append(parts, reversed[i])
+	}
+	return strings.Join(parts, "/"), nil
 }

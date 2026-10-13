@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
-import { useDriveItemsStore } from '@/stores/driveItems'
+import { useDriveItemsStore, MoveNotSettledError, MOVE_POLL_INTERVAL_MS } from '@/stores/driveItems'
 import * as api from '@/api/driveItems'
 import type { DriveItem, DriveListResponse } from '@/api/driveItems'
 
@@ -235,7 +235,7 @@ describe('driveItems store', () => {
     expect(store.error).toBe(null)
   })
 
-  it('move removes the item from the current listing', async () => {
+  it('move removes the item once the re-key settles ready', async () => {
     vi.spyOn(api, 'listDriveItems').mockResolvedValue({
       status: 'ok',
       data: [item('a'), item('b')],
@@ -243,7 +243,7 @@ describe('driveItems store', () => {
     })
     const moveSpy = vi.spyOn(api, 'moveDriveItem').mockResolvedValue({
       status: 'ok',
-      data: item('a'),
+      data: { ...item('a'), status: 'ready' },
     })
 
     const store = useDriveItemsStore()
@@ -252,8 +252,59 @@ describe('driveItems store', () => {
     const moved = await store.move('a', 'dest-uuid')
 
     expect(moveSpy).toHaveBeenCalledWith('a', 'dest-uuid')
-    expect(moved.uuid).toBe('a')
+    expect(moved.status).toBe('ready')
     expect(store.items.map((i) => i.uuid)).toEqual(['b'])
+  })
+
+  it('move keeps the item and rejects when the re-key failed', async () => {
+    vi.spyOn(api, 'listDriveItems').mockResolvedValue({
+      status: 'ok',
+      data: [item('a'), item('b')],
+      meta: { has_more: false, next_cursor: '' },
+    })
+    vi.spyOn(api, 'moveDriveItem').mockResolvedValue({
+      status: 'ok',
+      data: { ...item('a'), status: 'failed' },
+    })
+
+    const store = useDriveItemsStore()
+    await store.loadFirstPage({ cloudAccountId: 1 })
+
+    await expect(store.move('a', 'dest-uuid')).rejects.toBeInstanceOf(MoveNotSettledError)
+    // A failed move leaves the item where it was: it must stay in the listing.
+    expect(store.items.map((i) => i.uuid)).toEqual(['a', 'b'])
+  })
+
+  it('move polls a single item until the re-key settles', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(api, 'listDriveItems').mockResolvedValue({
+        status: 'ok',
+        data: [item('a'), item('b')],
+        meta: { has_more: false, next_cursor: '' },
+      })
+      vi.spyOn(api, 'moveDriveItem').mockResolvedValue({
+        status: 'ok',
+        data: { ...item('a'), status: 'moving' },
+      })
+      const getSpy = vi.spyOn(api, 'getDriveItem').mockResolvedValue({
+        status: 'ok',
+        data: { ...item('a'), status: 'ready' },
+      })
+
+      const store = useDriveItemsStore()
+      await store.loadFirstPage({ cloudAccountId: 1 })
+
+      const pending = store.move('a', 'dest-uuid')
+      await vi.advanceTimersByTimeAsync(MOVE_POLL_INTERVAL_MS)
+      const moved = await pending
+
+      expect(getSpy).toHaveBeenCalledWith('a')
+      expect(moved.status).toBe('ready')
+      expect(store.items.map((i) => i.uuid)).toEqual(['b'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('createFolder prepends the new folder to items', async () => {
@@ -270,15 +321,30 @@ describe('driveItems store', () => {
     expect(store.items).toHaveLength(2)
   })
 
-  it('rename updates the target item in place', async () => {
-    const updated = item('a', 'Renamed A')
-    vi.spyOn(api, 'renameDriveItem').mockResolvedValue({ status: 'ok', data: updated })
+  it('rename updates the item once the re-key settles ready', async () => {
+    vi.spyOn(api, 'renameDriveItem').mockResolvedValue({
+      status: 'ok',
+      data: { ...item('a', 'Renamed A'), status: 'ready' },
+    })
 
     const store = useDriveItemsStore()
     store.items = [item('a', 'Old A'), item('b')]
 
     await store.rename('a', 'Renamed A')
     expect(store.items[0]?.name).toBe('Renamed A')
+  })
+
+  it('rename keeps the old name and rejects when the re-key failed', async () => {
+    vi.spyOn(api, 'renameDriveItem').mockResolvedValue({
+      status: 'ok',
+      data: { ...item('a', 'Old A'), status: 'failed' },
+    })
+
+    const store = useDriveItemsStore()
+    store.items = [item('a', 'Old A')]
+
+    await expect(store.rename('a', 'New A')).rejects.toBeInstanceOf(MoveNotSettledError)
+    expect(store.items[0]?.name).toBe('Old A')
   })
 
   it('remove deletes the item from items list', async () => {

@@ -65,6 +65,11 @@ describe('drive locale namespace', () => {
       'toast_unstarred',
       'toast_download_started',
       'toast_upload_completed',
+      'name_conflict',
+      'name_invalid',
+      'moving',
+      'move_failed',
+      'rename_failed',
     ]
 
     for (const k of required) {

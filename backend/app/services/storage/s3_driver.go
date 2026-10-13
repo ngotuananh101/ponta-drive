@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -505,4 +506,102 @@ func (d *S3Driver) ListObjects(ctx context.Context, prefix string, continuationT
 	}
 
 	return result, nil
+}
+
+const (
+	// s3SingleCopyLimit is S3's ceiling for a single CopyObject call: at or
+	// below it one request copies the object; above it the copy must be split.
+	s3SingleCopyLimit = 5 * 1024 * 1024 * 1024
+	// s3CopyPartSize is the size of each multipart-copy part. 1 GiB keeps an
+	// object up to ~10 TiB under the 10 000-part cap and is far above the 5 MiB
+	// minimum part size.
+	s3CopyPartSize = 1 * 1024 * 1024 * 1024
+)
+
+// CopyObject copies srcKey to dstKey on the server, choosing a single copy or a
+// multipart copy from the source's size. The size decision lives here so the
+// interface stays one call and callers never carry the threshold.
+func (d *S3Driver) CopyObject(ctx context.Context, srcKey, dstKey string) error {
+	meta, err := d.GetMetadata(ctx, srcKey)
+	if err != nil {
+		return err
+	}
+
+	if meta.Size <= s3SingleCopyLimit {
+		_, err = d.client.CopyObject(ctx, &s3.CopyObjectInput{
+			Bucket:     aws.String(d.bucket),
+			Key:        aws.String(dstKey),
+			CopySource: aws.String(encodeCopySource(d.bucket, srcKey)),
+		})
+		return err
+	}
+
+	return d.multipartCopy(ctx, srcKey, dstKey, meta.Size)
+}
+
+// multipartCopy copies an object in s3CopyPartSize ranges. Every part but the
+// last is copied with a CopySourceRange; the last runs to the end of the
+// object. A failure aborts the upload so no half-copied object is left behind.
+func (d *S3Driver) multipartCopy(ctx context.Context, srcKey, dstKey string, size int64) error {
+	uploadID, err := d.InitiateMultipart(ctx, dstKey, "")
+	if err != nil {
+		return err
+	}
+
+	parts := make([]contracts.CompletedPart, 0)
+	for partNumber, offset := int32(1), int64(0); offset < size; partNumber, offset = partNumber+1, offset+s3CopyPartSize {
+		end := offset + s3CopyPartSize - 1
+		if end >= size {
+			end = size - 1
+		}
+		rangeHeader := fmt.Sprintf("bytes=%d-%d", offset, end)
+
+		output, err := d.client.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
+			Bucket:          aws.String(d.bucket),
+			Key:             aws.String(dstKey),
+			UploadId:        aws.String(uploadID),
+			PartNumber:      aws.Int32(partNumber),
+			CopySource:      aws.String(encodeCopySource(d.bucket, srcKey)),
+			CopySourceRange: aws.String(rangeHeader),
+		})
+		if err != nil {
+			d.abortMultipartSafely(ctx, dstKey, uploadID)
+			return err
+		}
+		if output.CopyPartResult == nil || output.CopyPartResult.ETag == nil {
+			d.abortMultipartSafely(ctx, dstKey, uploadID)
+			return errors.New("empty ETag returned from upload part copy")
+		}
+
+		parts = append(parts, contracts.CompletedPart{
+			PartNumber: partNumber,
+			ETag:       strings.Trim(*output.CopyPartResult.ETag, "\""),
+		})
+	}
+
+	if err := d.CompleteMultipart(ctx, dstKey, uploadID, parts); err != nil {
+		d.abortMultipartSafely(ctx, dstKey, uploadID)
+		return err
+	}
+	return nil
+}
+
+// abortMultipartSafely attempts to cancel the multipart upload on S3 even if the
+// original context was cancelled (e.g. client disconnected or timeout expired).
+func (d *S3Driver) abortMultipartSafely(ctx context.Context, key, uploadID string) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	_ = d.AbortMultipart(cleanupCtx, key, uploadID)
+}
+
+// encodeCopySource builds the x-amz-copy-source header value. The SDK does not
+// encode it, so each path segment is escaped on its own and the "/" separators
+// are left intact; escaping the whole string would turn them into %2F and S3
+// would look for an object whose key literally contains slashes.
+func encodeCopySource(bucket, key string) string {
+	segments := strings.Split(key, "/")
+	for i, segment := range segments {
+		segments[i] = url.PathEscape(segment)
+	}
+	return bucket + "/" + strings.Join(segments, "/")
 }

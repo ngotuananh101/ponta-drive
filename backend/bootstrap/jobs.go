@@ -9,5 +9,6 @@ import (
 func Jobs() []queue.Job {
 	return []queue.Job{
 		&jobs.SyncS3BucketJob{},
+		&jobs.RekeyDriveItemJob{},
 	}
 }
