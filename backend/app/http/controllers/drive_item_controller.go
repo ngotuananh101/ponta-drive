@@ -201,7 +201,7 @@ func (c *DriveItemController) StoreFolder(ctx http.Context) http.Response {
 
 	folder, err := c.service.CreateFolder(context.Background(), user.ID, cloudAccountID, parentID, req.Name)
 	if err != nil {
-		return failResponse(ctx, http.StatusBadRequest, errKeyCreateFailed, err)
+		return failServiceError(ctx, err, errKeyCreateFailed)
 	}
 
 	activityService := services.NewActivityService()

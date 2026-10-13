@@ -434,3 +434,28 @@ func (s *BucketSyncTestSuite) TestCreateAccountAutoSyncs() {
 	s.Equal("idle", account.SyncStatus)
 	s.NotNil(account.LastSyncedAt)
 }
+
+// TestUploadRejectsDuplicateName proves the presigned-upload flow refuses a
+// name already used in the same folder, because both objects would share one
+// S3 key.
+func (s *BucketSyncTestSuite) TestUploadRejectsDuplicateName() {
+	body := map[string]any{
+		"cloud_account_id": s.account.ID,
+		"file_name":        "duplicate.txt",
+		"size":             10,
+		"mime_type":        "text/plain",
+	}
+	raw, _ := json.Marshal(body)
+
+	first, err := s.Http(s.T()).WithToken(s.token).Post("/v1/drive/upload/presigned", bytes.NewBuffer(raw))
+	s.Require().NoError(err)
+	first.AssertStatus(http.StatusOK)
+
+	second, err := s.Http(s.T()).WithToken(s.token).Post("/v1/drive/upload/presigned", bytes.NewBuffer(raw))
+	s.Require().NoError(err)
+	second.AssertStatus(http.StatusUnprocessableEntity)
+
+	secondBody, _ := second.Json()
+	message, _ := secondBody["message"].(string)
+	s.NotContains(message, "name_conflict", "the translation key must resolve")
+}

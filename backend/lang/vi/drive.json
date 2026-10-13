@@ -13,5 +13,7 @@
   "preview_too_large": "Tệp quá lớn để xem trước. Hãy tải xuống để xem.",
   "preview_unsupported": "Định dạng tệp này không hỗ trợ xem trước. Hãy tải xuống để xem.",
   "invalid_cursor": "Con trỏ phân trang không hợp lệ.",
-  "parent_not_found": "Không tìm thấy thư mục cha hoặc bạn không có quyền truy cập."
+  "parent_not_found": "Không tìm thấy thư mục cha hoặc bạn không có quyền truy cập.",
+  "name_conflict": "Đã có tệp hoặc thư mục mang tên này trong thư mục hiện tại.",
+  "name_invalid": "Tên này không hợp lệ."
 }

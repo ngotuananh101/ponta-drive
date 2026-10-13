@@ -675,3 +675,51 @@ func (s *DriveItemAPITestSuite) TestSearchMatchesSubstringAndRejectsNonMatch() {
 	s.Contains(s.searchNames("report"), "quarterly-report.pdf")
 	s.Empty(s.searchNames("zzz-no-such-name"), "a non-matching search must return nothing")
 }
+
+// TestCreateFolderRejectsDuplicateName proves the key scheme's uniqueness rule
+// is enforced where a name is first introduced: two folders with the same name
+// in the same parent would share the same S3 key prefix.
+func (s *DriveItemAPITestSuite) TestCreateFolderRejectsDuplicateName() {
+	s.createFolder("", "Duplicated")
+
+	payload, _ := json.Marshal(map[string]any{
+		"cloud_account_id": s.account.ID,
+		"name":             "Duplicated",
+	})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		Post("/v1/drive/items/folders", bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusUnprocessableEntity)
+
+	body, _ := resp.Json()
+	message, _ := body["message"].(string)
+	s.NotEmpty(message)
+	s.NotContains(message, "name_conflict", "the translation key must resolve")
+	s.NotContains(message, "UNIQUE", "raw DB error must not leak")
+
+	// The name is free in a different parent.
+	parent := s.createFolder("", "Parent")
+	child := s.createFolderItem("Duplicated", &parent)
+	s.NotEmpty(child.UUID)
+}
+
+// TestCreateFolderRejectsInvalidName proves a name that would corrupt the key
+// path is rejected before any row is created.
+func (s *DriveItemAPITestSuite) TestCreateFolderRejectsInvalidName() {
+	payload, _ := json.Marshal(map[string]any{
+		"cloud_account_id": s.account.ID,
+		"name":             "bad/name",
+	})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		Post("/v1/drive/items/folders", bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusUnprocessableEntity)
+
+	body, _ := resp.Json()
+	message, _ := body["message"].(string)
+	s.NotEmpty(message)
+	s.NotContains(message, "name_invalid", "the translation key must resolve")
+
+	// Nothing was created.
+	s.Empty(s.listFolder(""))
+}

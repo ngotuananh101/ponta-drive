@@ -118,12 +118,20 @@ func (s *CloudDriveService) CreateFolder(ctx context.Context, userID uint, cloud
 		}
 	}
 
+	trimmedName := strings.TrimSpace(name)
+	if err := ValidateItemName(trimmedName); err != nil {
+		return nil, err
+	}
+	if err := s.EnsureUniqueName(ctx, userID, cloudAccountID, parentID, trimmedName, 0); err != nil {
+		return nil, err
+	}
+
 	folder := &models.DriveItem{
 		UUID:           uuid.New().String(),
 		UserID:         userID,
 		CloudAccountID: cloudAccountID,
 		ParentID:       parentID,
-		Name:           strings.TrimSpace(name),
+		Name:           trimmedName,
 		Type:           models.ItemTypeFolder,
 		Status:         models.ItemStatusReady,
 	}
@@ -519,6 +527,13 @@ func (s *CloudDriveService) InitiatePresignedUpload(ctx context.Context, userID 
 		}
 	}
 
+	if err := ValidateItemName(fileName); err != nil {
+		return nil, nil, err
+	}
+	if err := s.EnsureUniqueName(ctx, userID, cloudAccountID, parentID, fileName, 0); err != nil {
+		return nil, nil, err
+	}
+
 	fileExt := strings.TrimPrefix(filepath.Ext(fileName), ".")
 	storageKey := fmt.Sprintf("users/%d/items/%s-%s", userID, uuid.New().String(), fileName)
 
@@ -607,6 +622,13 @@ func (s *CloudDriveService) InitiateMultipartUpload(ctx context.Context, userID 
 		if err != nil || parent.ID == 0 {
 			return nil, errors.New("parent folder not found")
 		}
+	}
+
+	if err := ValidateItemName(fileName); err != nil {
+		return nil, err
+	}
+	if err := s.EnsureUniqueName(ctx, userID, cloudAccountID, parentID, fileName, 0); err != nil {
+		return nil, err
 	}
 
 	if chunkSize <= 0 {
