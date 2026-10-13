@@ -273,15 +273,15 @@ func (s *CloudDriveService) GetBreadcrumb(ctx context.Context, userID uint, item
 	return chain, nil
 }
 
-// UpdateItem updates name or parent folder of an item.
-func (s *CloudDriveService) UpdateItem(ctx context.Context, userID uint, itemUUID string, newName string, newParentID *uint) (*models.DriveItem, error) {
+// ValidateMove resolves and checks a rename/move without writing anything: the
+// item exists, the destination is an existing folder in the same account, the
+// move cannot create a cycle, and the resulting name is valid and unique in its
+// destination folder. It returns the item as it is today (unchanged) so the
+// caller can log against the current name.
+func (s *CloudDriveService) ValidateMove(ctx context.Context, userID uint, itemUUID string, newName string, newParentID *uint) (*models.DriveItem, error) {
 	item, err := s.GetItemByUUID(ctx, userID, itemUUID)
 	if err != nil {
 		return nil, err
-	}
-
-	if strings.TrimSpace(newName) != "" {
-		item.Name = strings.TrimSpace(newName)
 	}
 
 	if newParentID != nil {
@@ -302,16 +302,69 @@ func (s *CloudDriveService) UpdateItem(ctx context.Context, userID uint, itemUUI
 				return nil, errors.New("destination is not a folder")
 			}
 			// Prevent cycles: the destination must not be the item itself or one
-			// of its own descendants. Walk up from the destination; if we reach
-			// the item, the move would create a loop.
+			// of its own descendants.
 			if s.isSelfOrDescendant(userID, item.CloudAccountID, *newParentID, item.ID) {
 				return nil, errors.New("cannot move a folder into itself or its own subfolder")
 			}
+		}
+	}
+
+	// The name the item will carry once the move settles. A rename is validated
+	// only when the caller supplies one: an existing item may predate the rule.
+	finalName := item.Name
+	if trimmed := strings.TrimSpace(newName); trimmed != "" {
+		if err := ValidateItemName(trimmed); err != nil {
+			return nil, err
+		}
+		finalName = trimmed
+	}
+
+	// The folder the item will live in once the move settles. A non-nil pointer
+	// to 0 means "the drive root", which is parent_id IS NULL.
+	destParentID := item.ParentID
+	if newParentID != nil {
+		if *newParentID == 0 {
+			destParentID = nil
+		} else {
+			destParentID = newParentID
+		}
+	}
+
+	if err := s.EnsureUniqueName(ctx, userID, item.CloudAccountID, destParentID, finalName, item.ID); err != nil {
+		return nil, err
+	}
+
+	return item, nil
+}
+
+// ApplyMove performs the database part of a rename/move: it writes the item's
+// new name, parent_id and storage_path (when one is supplied) and marks it
+// ready. Destination and name checks belong to ValidateMove, which must run
+// first. A settled move always ends at status = ready, so this also clears the
+// "moving" marker the controller sets before dispatching a re-key job.
+func (s *CloudDriveService) ApplyMove(ctx context.Context, userID uint, itemUUID string, newName string, newParentID *uint, newStoragePath string) (*models.DriveItem, error) {
+	item, err := s.GetItemByUUID(ctx, userID, itemUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.TrimSpace(newName) != "" {
+		item.Name = strings.TrimSpace(newName)
+	}
+
+	if newParentID != nil {
+		if *newParentID > 0 {
 			item.ParentID = newParentID
 		} else {
 			item.ParentID = nil
 		}
 	}
+
+	if newStoragePath != "" {
+		item.StoragePath = newStoragePath
+	}
+
+	item.Status = models.ItemStatusReady
 
 	if err := facades.Orm().Query().Save(item); err != nil {
 		return nil, err

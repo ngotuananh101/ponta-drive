@@ -723,3 +723,87 @@ func (s *DriveItemAPITestSuite) TestCreateFolderRejectsInvalidName() {
 	// Nothing was created.
 	s.Empty(s.listFolder(""))
 }
+
+// TestRenameRejectsDuplicateName proves the key scheme's uniqueness rule is
+// enforced on rename too: two items with the same name in one folder would
+// share one S3 key prefix.
+func (s *DriveItemAPITestSuite) TestRenameRejectsDuplicateName() {
+	s.createFolderItem("Dup A", nil)
+	dupB := s.createFolderItem("Dup B", nil)
+
+	payload, _ := json.Marshal(map[string]any{"name": "Dup A"})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		WithHeader("Content-Type", "application/json").
+		Patch(fmt.Sprintf("/v1/drive/items/%s", dupB.UUID), bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusUnprocessableEntity)
+
+	body, _ := resp.Json()
+	message, _ := body["message"].(string)
+	s.NotEmpty(message)
+	s.NotContains(message, "name_conflict", "the translation key must resolve")
+
+	var reloaded models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("uuid", dupB.UUID).First(&reloaded))
+	s.Equal("Dup B", reloaded.Name, "a rejected rename must not change the name")
+}
+
+// TestRenameToOwnNameIsAllowed proves the uniqueness check excludes the item
+// itself, so re-submitting the same name is not a conflict.
+func (s *DriveItemAPITestSuite) TestRenameToOwnNameIsAllowed() {
+	file := s.createFileItem("same.txt")
+
+	payload, _ := json.Marshal(map[string]any{"name": "same.txt"})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		WithHeader("Content-Type", "application/json").
+		Patch(fmt.Sprintf("/v1/drive/items/%s", file.UUID), bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertOk()
+}
+
+// TestRenameRejectsInvalidName proves a name that would corrupt the key path
+// (a "/" here) is rejected with a 422, not silently stored. (Review Focus #5.)
+func (s *DriveItemAPITestSuite) TestRenameRejectsInvalidName() {
+	folder := s.createFolderItem("Valid Name", nil)
+
+	payload, _ := json.Marshal(map[string]any{"name": "a/b.txt"})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		WithHeader("Content-Type", "application/json").
+		Patch(fmt.Sprintf("/v1/drive/items/%s", folder.UUID), bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusUnprocessableEntity)
+
+	body, _ := resp.Json()
+	message, _ := body["message"].(string)
+	s.NotEmpty(message)
+	s.NotContains(message, "name_invalid", "the translation key must resolve")
+
+	var reloaded models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("uuid", folder.UUID).First(&reloaded))
+	s.Equal("Valid Name", reloaded.Name)
+}
+
+// TestMoveRejectsDuplicateName proves a move into a folder that already holds
+// the same name is refused: both objects would land on one S3 key.
+func (s *DriveItemAPITestSuite) TestMoveRejectsDuplicateName() {
+	folderA := s.createFolder("", "Move Dup A")
+
+	first := s.createFileItem("clash.txt")
+	s.moveItem(first.UUID, folderA)
+
+	second := s.createFileItem("clash.txt")
+	payload, _ := json.Marshal(map[string]any{"parent_uuid": folderA})
+	resp, err := s.Http(s.T()).WithToken(s.token).
+		WithHeader("Content-Type", "application/json").
+		Patch(fmt.Sprintf("/v1/drive/items/%s", second.UUID), bytes.NewBuffer(payload))
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusUnprocessableEntity)
+
+	body, _ := resp.Json()
+	message, _ := body["message"].(string)
+	s.NotContains(message, "name_conflict", "the translation key must resolve")
+
+	var reloaded models.DriveItem
+	s.Require().NoError(facades.Orm().Query().Where("uuid", second.UUID).First(&reloaded))
+	s.Nil(reloaded.ParentID, "a rejected move must leave the item where it was")
+}

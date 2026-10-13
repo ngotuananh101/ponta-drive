@@ -299,9 +299,7 @@ func (c *DriveItemController) Update(ctx http.Context) http.Response {
 		}
 	}
 
-	// Capture the current name so a rename can be detected after the update:
-	// UpdateItem mutates and returns the same pointer, so item.Name afterwards
-	// already holds the new name.
+	// Capture the current name so a rename can be detected after the update.
 	previousName := ""
 	hasPrevious := false
 	if existing, fetchErr := c.service.GetItemByUUID(context.Background(), user.ID, itemUUID); fetchErr == nil {
@@ -309,7 +307,16 @@ func (c *DriveItemController) Update(ctx http.Context) http.Response {
 		hasPrevious = true
 	}
 
-	item, err := c.service.UpdateItem(context.Background(), user.ID, itemUUID, name, parentID)
+	// Validate first: destination, cycle guard, name validity and uniqueness. A
+	// bad request is rejected before anything is written, and the name errors
+	// map to their localized 422 through failServiceError.
+	if _, err := c.service.ValidateMove(context.Background(), user.ID, itemUUID, name, parentID); err != nil {
+		return failServiceError(ctx, err, "drive.update_failed")
+	}
+
+	// Same-key update: the object is not re-keyed here (Task 7 moves that to an
+	// asynchronous job), so storage_path is left untouched.
+	item, err := c.service.ApplyMove(context.Background(), user.ID, itemUUID, name, parentID, "")
 	if err != nil {
 		return failResponse(ctx, http.StatusBadRequest, "drive.update_failed", err)
 	}
