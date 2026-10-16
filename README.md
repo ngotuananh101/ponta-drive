@@ -82,3 +82,48 @@ location / {
 
 Migrations run automatically at container start. To deploy an update:
 `git pull && docker compose up -d --build`.
+
+### Pre-built all-in-one image
+
+The project publishes a pre-built image containing the backend, frontend, and
+nginx reverse proxy to GitHub Container Registry:
+
+```sh
+ghcr.io/ngotuananh101/ponta-drive:latest
+```
+
+#### Quick start with `docker run`
+
+```bash
+docker run -d \
+  --name ponta-drive \
+  -p 8080:8080 \
+  -e APP_KEY=$(openssl rand -hex 16) \
+  -e JWT_SECRET=$(openssl rand -hex 32) \
+  -v ponta_storage:/app/storage \
+  ghcr.io/ngotuananh101/ponta-drive:latest
+```
+
+#### Quick start with Docker Compose
+
+Use the production compose template for a simpler deployment:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+You must provide the required environment variables via `.env` file:
+
+```bash
+cp .env.example .env        # set APP_KEY and JWT_SECRET
+docker compose -f docker-compose.prod.yml up -d
+```
+
+The data volume `ponta_storage` will be created automatically and persist
+across container restarts.
+
+#### GitHub Actions webhook
+
+The GitHub Actions workflow automatically publishes the image on pushes to the
+`main` branch. To trigger a manual deploy, add the `DEPLOY_WEBHOOK` secret to
+the repository settings.
