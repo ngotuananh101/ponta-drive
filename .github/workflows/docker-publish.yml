@@ -52,9 +52,12 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Deploy Webhook
-        if: ${{ secrets.DEPLOY_WEBHOOK != '' }}
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK }}
         run: |
-          echo "Triggering deployment webhook..."
-          curl -s -S -f -X POST "$DEPLOY_WEBHOOK_URL"
+          if [ -n "$DEPLOY_WEBHOOK_URL" ]; then
+            echo "Triggering deployment webhook..."
+            curl -s -S -f -X POST "$DEPLOY_WEBHOOK_URL"
+          else
+            echo "DEPLOY_WEBHOOK secret is not set, skipping deployment webhook."
+          fi
