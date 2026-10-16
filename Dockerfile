@@ -51,4 +51,7 @@ RUN chmod +x /app/entrypoint.sh \
 EXPOSE 8080
 VOLUME ["/app/storage"]
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://127.0.0.1:8080/ping || exit 1
+
 ENTRYPOINT ["/app/entrypoint.sh"]

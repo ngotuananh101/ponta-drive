@@ -3,12 +3,14 @@ services:
     image: ghcr.io/ngotuananh101/ponta-drive:latest
     ports:
       - "127.0.0.1:8080:8080"
+    env_file:
+      - .env
     environment:
       - APP_KEY=${APP_KEY}
       - JWT_SECRET=${JWT_SECRET}
-      - DB_CONNECTION=sqlite
-      - DB_DATABASE=/app/storage/database.sqlite
-      - QUEUE_CONNECTION=sync
+      - DB_CONNECTION=${DB_CONNECTION:-sqlite}
+      - DB_DATABASE=${DB_DATABASE:-/app/storage/database.sqlite}
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-sync}
     volumes:
       - ponta_storage:/app/storage
     restart: unless-stopped

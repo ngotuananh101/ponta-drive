@@ -124,6 +124,11 @@ across container restarts.
 
 #### GitHub Actions webhook
 
-The GitHub Actions workflow automatically publishes the image on pushes to the
-`main` branch. To trigger a manual deploy, add the `DEPLOY_WEBHOOK` secret to
-the repository settings.
+The GitHub Actions workflow automatically publishes the image to GHCR on pushes
+to the `main` branch. To trigger an external deployment target upon successful
+image publication, add the `DEPLOY_WEBHOOK` secret to the repository settings.
+
+`DEPLOY_WEBHOOK` is an optional repository secret containing a webhook URL
+that accepts an HTTP POST. This enables push-based deployment automation to
+self-hosted targets such as Portainer, Watchtower, Coolify, or custom servers
+that expose a deploy trigger endpoint.

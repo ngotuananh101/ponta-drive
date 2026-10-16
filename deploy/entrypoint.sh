@@ -29,6 +29,7 @@ API_PID=""
 NGINX_PID=""
 
 cleanup() {
+  EXIT_CODE=${1:-0}
   echo "[entrypoint] received termination signal, shutting down gracefully..."
   if [ -n "$NGINX_PID" ] && kill -0 "$NGINX_PID" 2>/dev/null; then
     kill -TERM "$NGINX_PID" 2>/dev/null || true
@@ -38,10 +39,10 @@ cleanup() {
   fi
   wait
   echo "[entrypoint] shutdown complete."
-  exit 0
+  exit "$EXIT_CODE"
 }
 
-trap cleanup TERM INT HUP QUIT
+trap 'cleanup 0' TERM INT HUP QUIT
 
 # Launch Go backend API on 127.0.0.1:3000
 echo "[entrypoint] starting Go backend on $APP_HOST:$APP_PORT..."
@@ -57,14 +58,12 @@ NGINX_PID=$!
 while true; do
   if ! kill -0 "$API_PID" 2>/dev/null; then
     echo "[entrypoint] ERROR: Go backend exited unexpectedly."
-    cleanup
-    exit 1
+    cleanup 1
   fi
 
   if ! kill -0 "$NGINX_PID" 2>/dev/null; then
     echo "[entrypoint] ERROR: Nginx exited unexpectedly."
-    cleanup
-    exit 1
+    cleanup 1
   fi
 
   sleep 2
