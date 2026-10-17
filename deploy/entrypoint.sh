@@ -17,6 +17,7 @@ if [ -n "$DB_DATABASE" ]; then
   db_dir=$(dirname "$DB_DATABASE")
   mkdir -p "$db_dir"
 fi
+chmod -R 775 /app/storage 2>/dev/null || true
 
 # Run database migrations before starting public listeners
 if [ "$ROLE" = "api" ]; then

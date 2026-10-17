@@ -47,8 +47,11 @@ COPY --from=frontend-build /app/dist /usr/share/nginx/html
 COPY deploy/nginx.conf /etc/nginx/http.d/default.conf
 COPY deploy/entrypoint.sh /app/entrypoint.sh
 
+ENV DB_CONNECTION=sqlite \
+    DB_DATABASE=/app/storage/database.sqlite
+
 RUN chmod +x /app/entrypoint.sh \
-    && mkdir -p /app/storage
+    && mkdir -p /app/storage /app/database
 
 EXPOSE 8080
 VOLUME ["/app/storage"]
