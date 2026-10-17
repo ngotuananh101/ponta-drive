@@ -36,24 +36,25 @@
 - Consumes: Built-in BuildKit `TARGETARCH` argument.
 - Produces: Architecture-aware Go binary build step.
 
-- [ ] **Step 1: Inspect current Dockerfile backend build stage**
+- [x] **Step 1: Inspect current Dockerfile backend build stage**
 
 Verify current `backend-build` stage at `Dockerfile:1-12`.
 
-- [ ] **Step 2: Add `ARG TARGETARCH` and architecture flag to `go build`**
+- [x] **Step 2: Add `ARG TARGETARCH` and architecture flag to `go build`**
 
 In `Dockerfile`, add `ARG TARGETARCH` inside `backend-build` stage and update the compile command to:
 ```dockerfile
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux ${TARGETARCH:+GOARCH=$TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/ponta-api .
+RUN if [ -n "$TARGETARCH" ]; then export GOARCH="$TARGETARCH"; fi && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/ponta-api .
 ```
 
-- [ ] **Step 3: Verify local build syntax**
+- [x] **Step 3: Verify local build syntax**
 
 Run: `docker build -t ponta-drive:test-syntax --target backend-build .` (or test compilation in Go).
 Expected: Successful compilation without syntax errors.
 
-- [ ] **Step 4: Commit Dockerfile update**
+- [x] **Step 4: Commit Dockerfile update**
 
 ```bash
 git add Dockerfile
@@ -71,7 +72,7 @@ git commit -m "feat(deploy): support TARGETARCH in backend build stage"
 - Consumes: GitHub Actions runner environments (`ubuntu-24.04`, `ubuntu-24.04-arm`), `secrets.GITHUB_TOKEN`, `secrets.DEPLOY_WEBHOOK`.
 - Produces: Published multi-arch manifest list on `ghcr.io/ngotuananh101/ponta-drive` containing `linux/amd64` and `linux/arm64`.
 
-- [ ] **Step 1: Write matrix `build` job in `.github/workflows/docker-publish.yml`**
+- [x] **Step 1: Write matrix `build` job in `.github/workflows/docker-publish.yml`**
 
 Configure `build` job:
 - Matrix with `ubuntu-24.04` (`linux/amd64`) and `ubuntu-24.04-arm` (`linux/arm64`).
@@ -84,7 +85,7 @@ Configure `build` job:
 - Export digest file to `/tmp/digests/<sha256>`.
 - Upload artifact `digests-${{ steps.platform-pair.outputs.tuple }}` via `actions/upload-artifact@v4`.
 
-- [ ] **Step 2: Write `merge` job in `.github/workflows/docker-publish.yml`**
+- [x] **Step 2: Write `merge` job in `.github/workflows/docker-publish.yml`**
 
 Configure `merge` job:
 - `runs-on: ubuntu-latest`, `needs: build`.
@@ -95,12 +96,12 @@ Configure `merge` job:
 - Run `docker buildx imagetools inspect` on the published tag.
 - Trigger `DEPLOY_WEBHOOK` step if configured.
 
-- [ ] **Step 3: Validate YAML syntax of the workflow file**
+- [x] **Step 3: Validate YAML syntax of the workflow file**
 
 Run: `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/docker-publish.yml'))"` or equivalent validator.
 Expected: Valid YAML with 0 parse errors.
 
-- [ ] **Step 4: Commit workflow update**
+- [x] **Step 4: Commit workflow update**
 
 ```bash
 git add .github/workflows/docker-publish.yml
@@ -118,11 +119,11 @@ git commit -m "ci: add native multi-arch matrix build and manifest merge for amd
 - Consumes: Multi-arch image capabilities.
 - Produces: Clear documentation for users running on ARM64 (Oracle Cloud Ampere A1, Raspberry Pi 4/5, AWS Graviton, Apple Silicon).
 
-- [ ] **Step 1: Update README section "Pre-built all-in-one image"**
+- [x] **Step 1: Update README section "Pre-built all-in-one image"**
 
 Document that the pre-built GHCR image is a multi-platform image supporting both `linux/amd64` and `linux/arm64` (AArch64) natively.
 
-- [ ] **Step 2: Commit README update**
+- [x] **Step 2: Commit README update**
 
 ```bash
 git add README.md
@@ -140,12 +141,12 @@ git commit -m "docs(deploy): document native multi-arch support for amd64 and ar
 - Consumes: GitHub Actions runner dispatch.
 - Produces: Live verified multi-platform image manifest on GHCR.
 
-- [ ] **Step 1: Push commits to `origin/main`**
+- [x] **Step 1: Push commits to `origin/main`**
 
 Run: `git push origin main`
 Expected: Push succeeds and triggers GitHub Actions workflow.
 
-- [ ] **Step 2: Monitor GitHub Actions run**
+- [x] **Step 2: Monitor GitHub Actions run**
 
 Run: `gh run list --workflow=docker-publish.yml -L 1` and `gh run watch <run-id>`.
 Expected:
