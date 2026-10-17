@@ -21,7 +21,7 @@ fi
 # Run database migrations before starting public listeners
 if [ "$ROLE" = "api" ]; then
   echo "[entrypoint] running database migrations ($DB_CONNECTION)..."
-  /app/ponta-api artisan migrate --force
+  /app/ponta-api artisan migrate
 fi
 
 # Setup process tracking and graceful shutdown traps
