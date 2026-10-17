@@ -9,7 +9,8 @@ RUN go mod download
 
 COPY backend/ .
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux ${TARGETARCH:+GOARCH=$TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/ponta-api .
+RUN if [ -n "$TARGETARCH" ]; then export GOARCH="$TARGETARCH"; fi && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/ponta-api .
 
 # ===================================================
 # Stage 2: Build Frontend (Vue 3 + Bun 1.4)
