@@ -92,6 +92,11 @@ nginx reverse proxy to GitHub Container Registry:
 ghcr.io/ngotuananh101/ponta-drive:latest
 ```
 
+The image is a multi-platform image and runs natively on both `linux/amd64`
+(x86_64) and `linux/arm64` (AArch64) architectures, so no emulation is required.
+This covers the common ARM64 server and SoC platforms, including Oracle Cloud
+Ampere A1, Raspberry Pi 4/5, AWS Graviton, and Apple Silicon (M1/M2/M3).
+
 #### Quick start with `docker run`
 
 ```bash
