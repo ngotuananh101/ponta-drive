@@ -13,11 +13,90 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            tuple: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            tuple: linux-arm64
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Normalize platform name for artifact
+        id: platform-pair
+        run: |
+          echo "tuple=${{ matrix.tuple }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+
+      - name: Build and push Docker image
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          output: type=image,"name=ghcr.io/${{ github.repository }}",push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ steps.platform-pair.outputs.tuple }}
+          cache-to: type=gha,mode=max,scope=${{ steps.platform-pair.outputs.tuple }}
+
+      - name: Export digest to file
+        run: |
+          mkdir -p /tmp/digests
+          echo -n "${{ steps.docker_build.outputs.digest }}" > /tmp/digests/${{ steps.platform-pair.outputs.tuple }}.sha256
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ steps.platform-pair.outputs.tuple }}
+          path: /tmp/digests/
+
+  merge:
+    name: Merge manifest list
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download digest artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          merge-multiple: true
+          path: /tmp/digests
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -40,16 +119,26 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Read digest files
+        id: digests
+        run: |
+          AMD64=$(cat /tmp/digests/linux-amd64.sha256)
+          ARM64=$(cat /tmp/digests/linux-arm64.sha256)
+          echo "amd64_digest=$AMD64" >> "$GITHUB_OUTPUT"
+          echo "arm64_digest=$ARM64" >> "$GITHUB_OUTPUT"
+          echo "amd64_digest=${AMD64}"
+          echo "arm64_digest=${ARM64}"
+
+      - name: Create multi-arch manifest list
+        run: |
+          docker buildx imagetools create \
+            ${{ steps.meta.outputs.tags }} \
+            ghcr.io/${{ github.repository }}@${{ steps.digests.outputs.amd64_digest }} \
+            ghcr.io/${{ github.repository }}@${{ steps.digests.outputs.arm64_digest }}
+
+      - name: Inspect multi-arch manifest list
+        run: |
+          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
 
       - name: Trigger Deploy Webhook
         env:
