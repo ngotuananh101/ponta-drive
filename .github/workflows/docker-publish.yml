@@ -128,10 +128,8 @@ jobs:
       - name: Trigger Deploy Webhook
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK }}
+          DEPLOY_WEBHOOK_INSECURE: ${{ secrets.DEPLOY_WEBHOOK_INSECURE || 'true' }}
+          DEPLOY_WEBHOOK_CA_CERT: ${{ secrets.DEPLOY_WEBHOOK_CA_CERT }}
         run: |
-          if [ -n "$DEPLOY_WEBHOOK_URL" ]; then
-            echo "Triggering deployment webhook..."
-            curl -s -S -f -X POST "$DEPLOY_WEBHOOK_URL"
-          else
-            echo "DEPLOY_WEBHOOK secret is not set, skipping deployment webhook."
-          fi
+          chmod +x ./deploy/trigger-webhook.sh
+          ./deploy/trigger-webhook.sh
